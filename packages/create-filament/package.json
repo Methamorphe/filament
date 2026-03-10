@@ -1,0 +1,13 @@
+{
+  "name": "create-filament",
+  "version": "0.0.1",
+  "license": "MPL-2.0",
+  "type": "module",
+  "bin": {
+    "create-filament": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

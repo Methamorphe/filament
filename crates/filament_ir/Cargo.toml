@@ -1,0 +1,6 @@
+[package]
+name = "filament_ir"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+

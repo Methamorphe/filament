@@ -1,0 +1,27 @@
+{
+  "name": "@filament/vite-plugin",
+  "version": "0.0.1",
+  "license": "MPL-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@babel/core": "^7.28.0",
+    "@babel/plugin-transform-typescript": "^7.28.0",
+    "@babel/types": "^7.28.2"
+  },
+  "devDependencies": {
+    "@types/babel__core": "^7.20.5"
+  },
+  "peerDependencies": {
+    "vite": "^7.0.0"
+  }
+}

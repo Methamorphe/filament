@@ -1,0 +1,140 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(255, 214, 102, 0.45), transparent 32rem),
+    linear-gradient(180deg, #f8f5ef 0%, #efe7da 100%);
+  color: #1e1a16;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
+.panel {
+  width: min(100%, 48rem);
+  background: rgba(255, 252, 247, 0.86);
+  border: 1px solid rgba(30, 26, 22, 0.12);
+  border-radius: 1.75rem;
+  box-shadow: 0 1.2rem 4rem rgba(53, 41, 26, 0.1);
+  padding: 2rem;
+  backdrop-filter: blur(12px);
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.75rem;
+  color: #8b5e34;
+  margin-bottom: 0.75rem;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-family: "Iowan Old Style", "Book Antiqua", serif;
+  font-size: clamp(2.2rem, 6vw, 3.8rem);
+  line-height: 0.95;
+  margin-bottom: 1rem;
+}
+
+.intro {
+  max-width: 42rem;
+  color: #55493e;
+  line-height: 1.6;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.9rem;
+  margin-top: 1.5rem;
+}
+
+.metric,
+.snapshots li {
+  background: #fff;
+  border-radius: 1rem;
+  border: 1px solid rgba(30, 26, 22, 0.08);
+  padding: 0.95rem 1rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  background: #1e1a16;
+  color: #fff9ef;
+  font: inherit;
+  padding: 0.8rem 1.1rem;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.hint {
+  margin-top: 1rem;
+  color: #8b5e34;
+}
+
+.snapshots {
+  margin-top: 1.75rem;
+}
+
+.snapshots h2 {
+  font-size: 1rem;
+  margin-bottom: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #55493e;
+}
+
+.snapshots ul {
+  list-style: none;
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 1rem;
+  }
+
+  .panel {
+    padding: 1.25rem;
+    border-radius: 1.2rem;
+  }
+}
+

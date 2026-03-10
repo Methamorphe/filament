@@ -1,0 +1,9 @@
+[package]
+name = "filament_codegen_dom"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+filament_ir = { path = "../filament_ir" }
+

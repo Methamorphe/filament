@@ -1,0 +1,20 @@
+{
+  "name": "playground",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@filament/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@filament/vite-plugin": "workspace:*",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
+  }
+}
+

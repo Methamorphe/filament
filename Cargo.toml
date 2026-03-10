@@ -1,0 +1,15 @@
+[workspace]
+members = [
+  "crates/filament_parser",
+  "crates/filament_ir",
+  "crates/filament_codegen_dom",
+  "crates/filament_codegen_ssr",
+  "crates/filament_optimizer",
+  "crates/filament_cli",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MPL-2.0"
+version = "0.0.1"

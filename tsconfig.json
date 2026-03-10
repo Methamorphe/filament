@@ -1,0 +1,21 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/vite-plugin"
+    },
+    {
+      "path": "./packages/server"
+    },
+    {
+      "path": "./packages/create-filament"
+    },
+    {
+      "path": "./apps/playground"
+    }
+  ]
+}
+

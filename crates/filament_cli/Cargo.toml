@@ -1,0 +1,13 @@
+[package]
+name = "filament_cli"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+filament_codegen_dom = { path = "../filament_codegen_dom" }
+filament_codegen_ssr = { path = "../filament_codegen_ssr" }
+filament_ir = { path = "../filament_ir" }
+filament_optimizer = { path = "../filament_optimizer" }
+filament_parser = { path = "../filament_parser" }
+
