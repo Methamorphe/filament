@@ -4,7 +4,8 @@
     "jsx": "preserve",
     "noEmit": true,
     "types": [
-      "vite/client"
+      "vite/client",
+      "vitest/globals"
     ]
   },
   "include": [
@@ -12,4 +13,3 @@
     "vite.config.ts"
   ]
 }
-

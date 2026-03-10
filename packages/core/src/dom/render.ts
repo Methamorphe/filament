@@ -77,6 +77,7 @@ export function mountValueBeforeAnchor(anchor: Node, current: Node[], value: Chi
 export function setAttributeOrProperty(element: Element, name: string, value: unknown): void {
   const normalizedName = name === "className" ? "class" : name;
   const shouldUseProperty =
+    !(element instanceof SVGElement) &&
     normalizedName in element &&
     !normalizedName.includes("-") &&
     !normalizedName.startsWith("aria-") &&

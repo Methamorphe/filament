@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.6.3",
   "scripts": {
     "build": "turbo run build",
+    "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "dev": "turbo run dev --filter=playground",
     "check:rust": "cargo check --workspace"

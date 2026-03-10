@@ -274,13 +274,14 @@ What already exists in the repo:
 - a Rust workspace
 - initial package and crate boundaries
 - an early core runtime surface
+- a browser-side benchmark lab in `apps/playground` for direct DOM versus React VDOM update paths
 
 What still needs to be completed to validate the architecture:
 
 - the end-to-end TSX compiler pipeline
 - a working playground app
 - SSR parity and hydration groundwork
-- stronger tests and benchmarks
+- broader automated benchmarks and stronger test coverage
 
 ## Getting Started
 
@@ -288,11 +289,27 @@ Install dependencies and validate the existing workspace:
 
 ```bash
 pnpm install
+pnpm test
 pnpm typecheck
 pnpm check:rust
 ```
 
-As the POC is completed, `pnpm dev` should run the Filament playground through Turbo and Vite.
+`pnpm dev` runs the playground through Turbo and Vite.
+
+The playground now includes an in-browser benchmark lab that compares Filament against a React
+Virtual DOM baseline across multiple suites:
+
+- fine-grained grid updates
+- a nested multi-component dashboard
+- staged async API refreshes
+- graph-heavy animation and stream updates
+
+For production benchmark runs:
+
+```bash
+pnpm --filter playground build
+pnpm --filter playground preview
+```
 
 ## Future Direction
 

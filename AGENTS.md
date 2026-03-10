@@ -57,6 +57,7 @@ Those documents are the current source of truth for scope, terminology, and syst
 Run these from the repository root:
 
 - `pnpm build`
+- `pnpm test`
 - `pnpm typecheck`
 - `pnpm dev`
 - `pnpm check:rust`
@@ -64,7 +65,8 @@ Run these from the repository root:
 Package-level commands currently follow the same pattern:
 
 - TypeScript packages expose `build` and `typecheck`
-- the playground exposes `dev`, `build`, and `typecheck`
+- packages may also expose `test` once they add real coverage
+- the playground exposes `dev`, `build`, `preview`, `test`, and `typecheck`
 - Rust validation currently goes through `cargo check --workspace`
 
 If you introduce a new persistent workflow such as `test`, `lint`, or `bench`, wire it consistently:

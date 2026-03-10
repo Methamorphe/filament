@@ -1,4 +1,4 @@
-import { render } from "@filament/core";
+import { render, type Child } from "@filament/core";
 import { App } from "./App";
 import "./styles.css";
 
@@ -8,5 +8,4 @@ if (root === null) {
   throw new Error("Missing #app container.");
 }
 
-render(() => <App />, root);
-
+render(() => <App /> as unknown as Child, root);
