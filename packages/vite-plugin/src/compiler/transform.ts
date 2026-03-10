@@ -165,14 +165,17 @@ function compileNativeElementHtml(
     }
 
     const attributeName = jsxAttributeName(attribute.name);
+    const normalizedAttributeName = normalizeAttributeName(attributeName);
 
     if (attribute.value === null) {
-      staticAttributes.push(attributeName);
+      staticAttributes.push(normalizedAttributeName);
       continue;
     }
 
     if (t.isStringLiteral(attribute.value)) {
-      staticAttributes.push(`${attributeName}="${escapeHtmlAttribute(attribute.value.value)}"`);
+      staticAttributes.push(
+        `${normalizedAttributeName}="${escapeHtmlAttribute(attribute.value.value)}"`,
+      );
       continue;
     }
 
@@ -203,23 +206,25 @@ function compileNativeElementHtml(
       }
 
       if (literal === true) {
-        staticAttributes.push(attributeName);
+        staticAttributes.push(normalizedAttributeName);
         continue;
       }
 
-      staticAttributes.push(`${attributeName}="${escapeHtmlAttribute(String(literal))}"`);
+      staticAttributes.push(
+        `${normalizedAttributeName}="${escapeHtmlAttribute(String(literal))}"`,
+      );
       continue;
     }
 
     elementRef ??= createNodeRef(ctx);
     ctx.bindings.push(
-      bindingObject([
-        property("kind", t.stringLiteral("attribute")),
-        property("ref", t.stringLiteral(elementRef)),
-        property("name", t.stringLiteral(normalizeAttributeName(attributeName))),
-        property("evaluate", t.arrowFunctionExpression([], expression)),
-      ]),
-    );
+        bindingObject([
+          property("kind", t.stringLiteral("attribute")),
+          property("ref", t.stringLiteral(elementRef)),
+          property("name", t.stringLiteral(normalizedAttributeName)),
+          property("evaluate", t.arrowFunctionExpression([], expression)),
+        ]),
+      );
   }
 
   const attributes = [...staticAttributes];
