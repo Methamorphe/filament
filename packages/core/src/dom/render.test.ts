@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTemplateInstance } from "../internal.js";
 import { hydrate, setAttributeOrProperty } from "./render";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("setAttributeOrProperty", () => {
   it("writes SVG points as an attribute instead of a read-only property", () => {
@@ -53,5 +57,44 @@ describe("hydrate diagnostics", () => {
     expect(message).toContain("parent=<div>");
     expect(message).toContain('cursor=<span data-f-node="other">');
     expect(message).toContain('remaining=<span data-f-node="other">');
+  });
+});
+
+describe("template fast paths", () => {
+  it("skips tree walking for static single-root templates", () => {
+    const walkerSpy = vi.spyOn(document, "createTreeWalker");
+    const node = createTemplateInstance(
+      {
+        html: '<button data-f-node="t0-n0">ready</button>',
+        nodeRefs: ["t0-n0"],
+        anchorRefs: [],
+      },
+      [],
+    ) as HTMLButtonElement;
+
+    expect(node.outerHTML).toBe("<button>ready</button>");
+    expect(walkerSpy).not.toHaveBeenCalled();
+  });
+
+  it("skips tree walking for single-root templates with only root bindings", () => {
+    const walkerSpy = vi.spyOn(document, "createTreeWalker");
+    const node = createTemplateInstance(
+      {
+        html: '<button data-f-node="t0-n0">ready</button>',
+        nodeRefs: ["t0-n0"],
+        anchorRefs: [],
+      },
+      [
+        {
+          kind: "attribute",
+          ref: "t0-n0",
+          name: "className",
+          evaluate: () => "hot",
+        },
+      ],
+    ) as HTMLButtonElement;
+
+    expect(node.outerHTML).toBe('<button class="hot">ready</button>');
+    expect(walkerSpy).not.toHaveBeenCalled();
   });
 });

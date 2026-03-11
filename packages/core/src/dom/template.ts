@@ -18,6 +18,14 @@ interface ResolvedRefs {
   starts: Map<string, Comment>;
 }
 
+function createEmptyResolvedRefs(): ResolvedRefs {
+  return {
+    nodes: new Map(),
+    anchors: new Map(),
+    starts: new Map(),
+  };
+}
+
 function getTemplate(html: string): HTMLTemplateElement {
   let template = templateCache.get(html);
 
@@ -81,6 +89,28 @@ function inspectRefNode(
 }
 
 function resolveRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): ResolvedRefs {
+  const rootElement =
+    root instanceof Element
+      ? root
+      : root.childNodes.length === 1 && root.firstChild?.nodeType === Node.ELEMENT_NODE
+        ? (root.firstChild as Element)
+        : null;
+
+  if (rootElement !== null && ir.anchorRefs.length === 0 && ir.nodeRefs.length === 1) {
+    const ref = ir.nodeRefs[0]!;
+    rootElement.removeAttribute(elementRefAttribute);
+
+    return {
+      nodes: new Map([[ref, rootElement]]),
+      anchors: new Map(),
+      starts: new Map(),
+    };
+  }
+
+  if (ir.nodeRefs.length === 0 && ir.anchorRefs.length === 0) {
+    return createEmptyResolvedRefs();
+  }
+
   const nodes = new Map<string, Element>();
   const anchors = new Map<string, Comment>();
   const starts = new Map<string, Comment>();
