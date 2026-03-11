@@ -37,6 +37,7 @@ interface PluginState {
   helperId?: t.Identifier;
   nextTemplateId?: number;
   programPath?: NodePath<t.Program>;
+  templateDeclarations?: t.VariableDeclaration[];
 }
 
 export function transformFilamentModule(
@@ -73,10 +74,29 @@ function createFilamentPlugin(options: TransformOptions): PluginObj<PluginState>
   return {
     name: "filament-jsx-transform",
     visitor: {
-      Program(path: NodePath<t.Program>, state: PluginState) {
-        state.options = options;
-        state.programPath = path;
-        state.nextTemplateId = 0;
+      Program: {
+        enter(path: NodePath<t.Program>, state: PluginState) {
+          state.options = options;
+          state.programPath = path;
+          state.nextTemplateId = 0;
+          state.templateDeclarations = [];
+        },
+        exit(path: NodePath<t.Program>, state: PluginState) {
+          const declarations = state.templateDeclarations ?? [];
+
+          if (declarations.length === 0) {
+            return;
+          }
+
+          const body = path.node.body;
+          let insertIndex = 0;
+
+          while (insertIndex < body.length && t.isImportDeclaration(body[insertIndex])) {
+            insertIndex += 1;
+          }
+
+          body.splice(insertIndex, 0, ...declarations);
+        },
       },
       JSXElement(path: NodePath<t.JSXElement>, state: PluginState) {
         if (path.findParent((parent: NodePath) => parent.isJSXElement() || parent.isJSXFragment())) {
@@ -137,21 +157,9 @@ function compileNativeElement(node: t.JSXElement, state: PluginState): t.Express
 
   const helperId = ensureHelper(state);
   const html = compileNativeElementHtml(node, ctx, state);
+  const templateId = registerTemplateIR(state, ctx, html);
 
-  return t.callExpression(helperId, [
-    t.objectExpression([
-      t.objectProperty(t.identifier("html"), t.stringLiteral(html)),
-      t.objectProperty(
-        t.identifier("nodeRefs"),
-        t.arrayExpression(ctx.nodeRefs.map((ref) => t.stringLiteral(ref))),
-      ),
-      t.objectProperty(
-        t.identifier("anchorRefs"),
-        t.arrayExpression(ctx.anchorRefs.map((ref) => t.stringLiteral(ref))),
-      ),
-    ]),
-    t.arrayExpression(ctx.bindings),
-  ]);
+  return t.callExpression(helperId, [templateId, t.arrayExpression(ctx.bindings)]);
 }
 
 function compileNativeElementHtml(
@@ -423,6 +431,35 @@ function ensureHelper(state: PluginState): t.Identifier {
 
   state.helperId = local;
   return local;
+}
+
+function registerTemplateIR(state: PluginState, ctx: TemplateContext, html: string): t.Identifier {
+  if (state.programPath === undefined) {
+    throw new Error("Filament transform expected a program path.");
+  }
+
+  const identifier = state.programPath.scope.generateUidIdentifier("filamentTemplate");
+  state.templateDeclarations ??= [];
+  state.templateDeclarations.push(
+    t.variableDeclaration("const", [
+      t.variableDeclarator(
+        identifier,
+        t.objectExpression([
+          t.objectProperty(t.identifier("html"), t.stringLiteral(html)),
+          t.objectProperty(
+            t.identifier("nodeRefs"),
+            t.arrayExpression(ctx.nodeRefs.map((ref) => t.stringLiteral(ref))),
+          ),
+          t.objectProperty(
+            t.identifier("anchorRefs"),
+            t.arrayExpression(ctx.anchorRefs.map((ref) => t.stringLiteral(ref))),
+          ),
+        ]),
+      ),
+    ]),
+  );
+
+  return identifier;
 }
 
 function bindingObject(properties: t.ObjectProperty[]): t.ObjectExpression {

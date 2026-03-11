@@ -8,9 +8,20 @@ import { mountValueBeforeAnchor, setAttributeOrProperty } from "./render.js";
 import type { DOMBinding, DOMTemplateIR } from "./types.js";
 
 const templateCache = new Map<string, HTMLTemplateElement>();
+const templateRefPlanCache = new Map<string, TemplateRefPlan>();
 const elementRefAttribute = "data-f-node";
 const anchorPrefix = "filament-anchor:";
 const hydrationStartPrefix = "filament-start:";
+
+interface PlannedRefPath {
+  ref: string;
+  path: number[];
+}
+
+interface TemplateRefPlan {
+  nodes: PlannedRefPath[];
+  anchors: PlannedRefPath[];
+}
 
 interface ResolvedRefs {
   nodes: Map<string, Element>;
@@ -41,6 +52,66 @@ function getTemplate(html: string): HTMLTemplateElement {
 
 function cloneTemplate(html: string): DocumentFragment {
   return getTemplate(html).content.cloneNode(true) as DocumentFragment;
+}
+
+function collectTemplateRefPaths(
+  current: Node,
+  path: number[],
+  nodes: PlannedRefPath[],
+  anchors: PlannedRefPath[],
+): void {
+  if (current.nodeType === Node.ELEMENT_NODE) {
+    const element = current as Element;
+    const ref = element.getAttribute(elementRefAttribute);
+
+    if (ref !== null) {
+      nodes.push({ ref, path: [...path] });
+    }
+  } else if (current.nodeType === Node.COMMENT_NODE) {
+    const comment = current as Comment;
+
+    if (comment.data.startsWith(anchorPrefix)) {
+      anchors.push({ ref: comment.data.slice(anchorPrefix.length), path: [...path] });
+    }
+  }
+
+  const children = Array.from(current.childNodes);
+
+  for (let index = 0; index < children.length; index += 1) {
+    collectTemplateRefPaths(children[index]!, [...path, index], nodes, anchors);
+  }
+}
+
+function getTemplateRefPlan(html: string): TemplateRefPlan {
+  const cached = templateRefPlanCache.get(html);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const nodes: PlannedRefPath[] = [];
+  const anchors: PlannedRefPath[] = [];
+  collectTemplateRefPaths(getTemplate(html).content, [], nodes, anchors);
+
+  const plan = { nodes, anchors };
+  templateRefPlanCache.set(html, plan);
+  return plan;
+}
+
+function resolveNodePath(root: DocumentFragment | Element, path: readonly number[]): Node {
+  let current: Node = root;
+
+  for (const index of path) {
+    const next = current.childNodes[index];
+
+    if (next === undefined) {
+      throw new Error("Template ref plan resolved outside the cloned subtree.");
+    }
+
+    current = next;
+  }
+
+  return current;
 }
 
 function collectBoundNodeRefs(bindings: readonly DOMBinding[]): Set<string> {
@@ -159,6 +230,79 @@ function inspectRefNode(
 }
 
 function resolveRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): ResolvedRefs {
+  if (getHydrationBoundary() === null) {
+    return resolveClonedRefs(root, ir);
+  }
+
+  return resolveHydratedRefs(root, ir);
+}
+
+function resolveClonedRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): ResolvedRefs {
+  if (ir.nodeRefs.length === 0 && ir.anchorRefs.length === 0) {
+    return createEmptyResolvedRefs();
+  }
+
+  const rootElement =
+    root instanceof Element
+      ? root
+      : root.childNodes.length === 1 && root.firstChild?.nodeType === Node.ELEMENT_NODE
+        ? (root.firstChild as Element)
+        : null;
+  const rootElementRef = getRootElementRef(rootElement);
+
+  if (
+    rootElement !== null &&
+    rootElementRef !== null &&
+    ir.anchorRefs.length === 0 &&
+    ir.nodeRefs.length === 1 &&
+    ir.nodeRefs[0] === rootElementRef
+  ) {
+    rootElement.removeAttribute(elementRefAttribute);
+
+    return {
+      nodes: new Map([[rootElementRef, rootElement]]),
+      anchors: new Map(),
+      starts: new Map(),
+    };
+  }
+
+  const plan = getTemplateRefPlan(ir.html);
+  const nodes = new Map<string, Element>();
+  const anchors = new Map<string, Comment>();
+
+  for (const entry of plan.nodes) {
+    if (!ir.nodeRefs.includes(entry.ref)) {
+      continue;
+    }
+
+    const element = resolveNodePath(root, entry.path);
+
+    if (!(element instanceof Element)) {
+      throw new Error(`Template ref "${entry.ref}" did not resolve to an element.`);
+    }
+
+    element.removeAttribute(elementRefAttribute);
+    nodes.set(entry.ref, element);
+  }
+
+  for (const entry of plan.anchors) {
+    if (!ir.anchorRefs.includes(entry.ref)) {
+      continue;
+    }
+
+    const anchor = resolveNodePath(root, entry.path);
+
+    if (anchor.nodeType !== Node.COMMENT_NODE) {
+      throw new Error(`Template anchor "${entry.ref}" did not resolve to a comment node.`);
+    }
+
+    anchors.set(entry.ref, anchor as Comment);
+  }
+
+  return { nodes, anchors, starts: new Map() };
+}
+
+function resolveHydratedRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): ResolvedRefs {
   const rootElement =
     root instanceof Element
       ? root
@@ -182,10 +326,6 @@ function resolveRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): Resol
       anchors: new Map(),
       starts: new Map(),
     };
-  }
-
-  if (ir.nodeRefs.length === 0 && ir.anchorRefs.length === 0) {
-    return createEmptyResolvedRefs();
   }
 
   const nodes = new Map<string, Element>();

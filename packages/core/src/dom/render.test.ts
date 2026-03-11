@@ -184,7 +184,7 @@ describe("template fast paths", () => {
     expect(walkerSpy).not.toHaveBeenCalled();
   });
 
-  it("walks only comments when the root is already resolved and only anchors remain", () => {
+  it("resolves anchor-only cloned templates without tree walking", () => {
     const walkerSpy = vi.spyOn(document, "createTreeWalker");
 
     const node = createTemplateInstance(
@@ -204,8 +204,36 @@ describe("template fast paths", () => {
 
     expect(node.outerHTML).toContain("ready");
     expect(node.outerHTML).toContain("filament-anchor:t0-a0");
-    expect(walkerSpy).toHaveBeenCalled();
-    expect(walkerSpy.mock.calls.at(-1)?.[1]).toBe(NodeFilter.SHOW_COMMENT);
+    expect(walkerSpy).not.toHaveBeenCalled();
+  });
+
+  it("resolves nested cloned refs from the cached template plan", () => {
+    const walkerSpy = vi.spyOn(document, "createTreeWalker");
+
+    const node = createTemplateInstance(
+      {
+        html: '<section><header data-f-node="t0-n0">Title</header><div><span data-f-node="t0-n1"><!--filament-anchor:t0-a0--></span></div></section>',
+        nodeRefs: ["t0-n0", "t0-n1"],
+        anchorRefs: ["t0-a0"],
+      },
+      [
+        {
+          kind: "attribute",
+          ref: "t0-n0",
+          name: "className",
+          evaluate: () => "hot",
+        },
+        {
+          kind: "insert",
+          ref: "t0-a0",
+          evaluate: () => "ready",
+        },
+      ],
+    ) as HTMLElement;
+
+    expect(node.querySelector("header")?.className).toBe("hot");
+    expect(node.querySelector("span")?.textContent).toBe("ready");
+    expect(walkerSpy).not.toHaveBeenCalled();
   });
 
   it("hydrates anchor-only roots without requiring a root node ref", () => {

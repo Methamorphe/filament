@@ -121,6 +121,7 @@ describe("transformFilamentModule", () => {
     const value = module.exports.View();
 
     expect(module.code).toContain('@filament/core/internal');
+    expect(module.code).toMatch(/const _filamentTemplate\d* = \{/);
     expect(module.captures).toHaveLength(1);
     expect(value.helper).toBe("dom");
     expect(module.captures[0]?.ir).toEqual({
