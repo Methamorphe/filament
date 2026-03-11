@@ -10,6 +10,15 @@ import {
   seriesToPolylinePoints,
   teamName,
 } from "./fixtures";
+import {
+  createSSRBenchmarkState,
+  mutateSSRFullRefresh,
+  mutateSSRHotPath,
+  type SSRBenchmarkState,
+  type SSRFeedItemState,
+  type SSRMetricState,
+  type SSRRowState,
+} from "./ssr-fixtures";
 import type {
   BenchmarkAdapter,
   BenchmarkController,
@@ -61,6 +70,8 @@ interface LaneState {
   progress: Signal<number>;
   state: Signal<string>;
 }
+
+type SSRCreateTemplate = typeof import("@filament/server").createSSRTemplate;
 
 function getNumber(suite: BenchmarkSuiteDefinition, key: string): number {
   const value = suite.config[key];
@@ -370,6 +381,159 @@ function FilamentGraphScreen(props: {
         </div>
       </article>
     </section>
+  );
+}
+
+function renderFilamentSSRMetricWithTemplate(
+  metric: SSRMetricState,
+  createSSRTemplate: SSRCreateTemplate,
+) {
+  return createSSRTemplate(
+    {
+      html: '<article class="bench-card"><span class="bench-kicker"><!--filament-anchor:a0--></span><strong class="bench-stat"><!--filament-anchor:a1--></strong><span class="bench-copy"><!--filament-anchor:a2--></span></article>',
+      nodeRefs: [],
+      anchorRefs: ["a0", "a1", "a2"],
+    },
+    [
+      {
+        kind: "insert",
+        ref: "a0",
+        evaluate: () => metric.label,
+      },
+      {
+        kind: "insert",
+        ref: "a1",
+        evaluate: () => formatCompact(metric.value),
+      },
+      {
+        kind: "insert",
+        ref: "a2",
+        evaluate: () => `Delta ${formatSigned(metric.delta)}%`,
+      },
+    ],
+  );
+}
+
+function renderFilamentSSRRow(
+  row: SSRRowState,
+  region: string,
+  createSSRTemplate: SSRCreateTemplate,
+) {
+  return createSSRTemplate(
+    {
+      html: '<div data-f-node="n0"><span><!--filament-anchor:a0--></span><span><!--filament-anchor:a1--></span></div>',
+      nodeRefs: ["n0"],
+      anchorRefs: ["a0", "a1"],
+    },
+    [
+      {
+        kind: "attribute",
+        ref: "n0",
+        name: "className",
+        evaluate: () =>
+          row.team === region ? "bench-inline-card bench-inline-card-active" : "bench-inline-card",
+      },
+      {
+        kind: "insert",
+        ref: "a0",
+        evaluate: () => row.team,
+      },
+      {
+        kind: "insert",
+        ref: "a1",
+        evaluate: () => `score ${row.score} · ${row.latency} ms · ${row.status}`,
+      },
+    ],
+  );
+}
+
+function renderFilamentSSRFeedItem(
+  item: SSRFeedItemState,
+  createSSRTemplate: SSRCreateTemplate,
+) {
+  return createSSRTemplate(
+    {
+      html: '<div class="bench-inline-card"><span><!--filament-anchor:a0--></span><span><!--filament-anchor:a1--></span></div>',
+      nodeRefs: [],
+      anchorRefs: ["a0", "a1"],
+    },
+    [
+      {
+        kind: "insert",
+        ref: "a0",
+        evaluate: () => item.title,
+      },
+      {
+        kind: "insert",
+        ref: "a1",
+        evaluate: () => item.age,
+      },
+    ],
+  );
+}
+
+function renderFilamentSSRScreen(
+  state: SSRBenchmarkState,
+  createSSRTemplate: SSRCreateTemplate,
+) {
+  return createSSRTemplate(
+    {
+      html: '<section class="bench-screen"><header class="bench-screen-head"><div><span class="bench-kicker">SSR Render</span><h3 class="bench-title"><!--filament-anchor:a0--></h3><p class="bench-copy"><!--filament-anchor:a1--></p></div><div class="bench-pill-row"><span class="bench-pill"><!--filament-anchor:a2--></span><span class="bench-pill"><!--filament-anchor:a3--></span><span class="bench-pill"><!--filament-anchor:a4--></span></div></header><section class="bench-kpi-grid"><!--filament-anchor:a5--></section><section class="bench-two-col"><article class="bench-card"><div class="bench-subhead"><span>Service rows</span><span><!--filament-anchor:a6--></span></div><div class="bench-stack"><!--filament-anchor:a7--></div></article><article class="bench-card"><div class="bench-subhead"><span>Activity feed</span><span><!--filament-anchor:a8--></span></div><div class="bench-stack"><!--filament-anchor:a9--></div></article></section></section>',
+      nodeRefs: [],
+      anchorRefs: ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"],
+    },
+    [
+      {
+        kind: "insert",
+        ref: "a0",
+        evaluate: () => `${state.region} render batch ${state.renderBatch}`,
+      },
+      {
+        kind: "insert",
+        ref: "a1",
+        evaluate: () => `Range ${state.rangeDays}d · ${state.alertCount} active alerts`,
+      },
+      {
+        kind: "insert",
+        ref: "a2",
+        evaluate: () => `Region ${state.region}`,
+      },
+      {
+        kind: "insert",
+        ref: "a3",
+        evaluate: () => `Rows ${state.rows.length}`,
+      },
+      {
+        kind: "insert",
+        ref: "a4",
+        evaluate: () => `Feed ${state.feedItems.length}`,
+      },
+      {
+        kind: "insert",
+        ref: "a5",
+        evaluate: () => state.metrics.map((metric) => renderFilamentSSRMetricWithTemplate(metric, createSSRTemplate)),
+      },
+      {
+        kind: "insert",
+        ref: "a6",
+        evaluate: () => `${state.rows.length} rows`,
+      },
+      {
+        kind: "insert",
+        ref: "a7",
+        evaluate: () => state.rows.map((row) => renderFilamentSSRRow(row, state.region, createSSRTemplate)),
+      },
+      {
+        kind: "insert",
+        ref: "a8",
+        evaluate: () => `${state.feedItems.length} events`,
+      },
+      {
+        kind: "insert",
+        ref: "a9",
+        evaluate: () => state.feedItems.map((item) => renderFilamentSSRFeedItem(item, createSSRTemplate)),
+      },
+    ],
   );
 }
 
@@ -804,6 +968,68 @@ function createGraphController(
   };
 }
 
+async function createSSRController(
+  suite: BenchmarkSuiteDefinition,
+  _container: HTMLElement,
+): Promise<BenchmarkController> {
+  const metricCount = getNumber(suite, "metricCount");
+  const rowCount = getNumber(suite, "tableRows");
+  const feedItemsCount = getNumber(suite, "feedItems");
+  const hotRenders = getNumber(suite, "hotRenders");
+  const refreshPasses = getNumber(suite, "refreshPasses");
+  const state = createSSRBenchmarkState(metricCount, rowCount, feedItemsCount);
+  const { createSSRTemplate, renderToString: renderSSRToString } = await import("@filament/server");
+  let lastHtml = "";
+
+  function renderSnapshot(): void {
+    lastHtml = renderSSRToString(() => renderFilamentSSRScreen(state, createSSRTemplate));
+
+    if (lastHtml.length === 0) {
+      throw new Error('SSR benchmark produced an empty Filament render.');
+    }
+  }
+
+  function runHotRenders(iterations: number): void {
+    for (let step = 0; step < iterations; step += 1) {
+      mutateSSRHotPath(state, step);
+      renderSnapshot();
+    }
+  }
+
+  function runRefreshRenders(passes: number): void {
+    for (let pass = 0; pass < passes; pass += 1) {
+      mutateSSRFullRefresh(state, pass);
+      renderSnapshot();
+    }
+  }
+
+  renderSnapshot();
+
+  return {
+    perform(actionId) {
+      switch (actionId) {
+        case "warm-hot-ssr-rerender":
+          runHotRenders(18);
+          return;
+        case "run-hot-ssr-rerender":
+          runHotRenders(hotRenders);
+          return;
+        case "warm-refresh-ssr-rerender":
+          runRefreshRenders(2);
+          return;
+        case "run-refresh-ssr-rerender":
+          runRefreshRenders(refreshPasses);
+          return;
+        default:
+          throw new Error(`Unknown SSR action "${actionId}".`);
+      }
+    },
+    destroy() {
+      lastHtml = "";
+    },
+  };
+}
+
 export const filamentBenchmarkAdapter: BenchmarkAdapter = {
   id: "filament",
   label: "Filament",
@@ -814,6 +1040,8 @@ export const filamentBenchmarkAdapter: BenchmarkAdapter = {
         return createGridController(suite, container);
       case "dashboard-nested":
         return createDashboardController(suite, container);
+      case "ssr-render":
+        return createSSRController(suite, container);
       case "async-api":
         return createAsyncController(suite, container);
       case "graph-motion":

@@ -94,7 +94,15 @@ export function App() {
     const report = benchmarkReport();
 
     if (report === null) {
-      return `No run yet for ${activeSuite().label}. Lower is better. The async suite uses staged simulated API boundaries rather than real network latency.`;
+      if (activeSuite().id === "async-api") {
+        return `No run yet for ${activeSuite().label}. Lower is better. This suite uses staged simulated API boundaries rather than real network latency.`;
+      }
+
+      if (activeSuite().id === "ssr-render") {
+        return `No run yet for ${activeSuite().label}. Lower is better. This suite measures pure string render cost inside the browser sandbox, not network or streaming overhead.`;
+      }
+
+      return `No run yet for ${activeSuite().label}. Lower is better.`;
     }
 
     return `Last run at ${new Date(report.generatedAt).toLocaleTimeString()}. Median of ${report.suite.config.samples} samples.`;
@@ -150,12 +158,14 @@ export function App() {
           <h1>Push the idea with multiple benchmark variants before growing the framework.</h1>
           <p className="intro">
             The playground now ships several benchmark suites: core grid updates, a nested
-            multi-component dashboard, staged async API refreshes, and graph-heavy motion screens.
+            multi-component dashboard, string-based SSR snapshots, staged async API refreshes, and
+            graph-heavy motion screens.
           </p>
 
           <div className="badges">
             <span className="badge">Fine-grained updates</span>
             <span className="badge">Nested component fan-out</span>
+            <span className="badge">SSR string render cost</span>
             <span className="badge">Async staged commits</span>
             <span className="badge">SVG graphs and animation ticks</span>
           </div>
@@ -176,7 +186,8 @@ export function App() {
             <h2>Benchmark Suites</h2>
             <p className="section-copy">
               Pick a suite depending on what you want to validate: raw reactive cost, nested
-              component propagation, staged async work, or graph-heavy frame updates.
+              component propagation, SSR render cost, staged async work, or graph-heavy frame
+              updates.
             </p>
           </div>
         </div>

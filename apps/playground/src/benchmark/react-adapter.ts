@@ -12,6 +12,15 @@ import {
   seriesToPolylinePoints,
   teamName,
 } from "./fixtures";
+import {
+  createSSRBenchmarkState,
+  mutateSSRFullRefresh,
+  mutateSSRHotPath,
+  type SSRBenchmarkState,
+  type SSRFeedItemState,
+  type SSRMetricState,
+  type SSRRowState,
+} from "./ssr-fixtures";
 import type {
   BenchmarkAdapter,
   BenchmarkController,
@@ -581,6 +590,105 @@ function ReactLane(props: { lane: LaneAtom }) {
   );
 }
 
+function ReactSSRMetricCard(props: { metric: SSRMetricState }) {
+  return h(
+    "article",
+    { className: "bench-card" },
+    h("span", { className: "bench-kicker" }, props.metric.label),
+    h("strong", { className: "bench-stat" }, formatCompact(props.metric.value)),
+    h("span", { className: "bench-copy" }, `Delta ${formatSigned(props.metric.delta)}%`),
+  );
+}
+
+function ReactSSRRow(props: { row: SSRRowState; region: string }) {
+  return h(
+    "div",
+    {
+      className:
+        props.row.team === props.region
+          ? "bench-inline-card bench-inline-card-active"
+          : "bench-inline-card",
+    },
+    h("span", null, props.row.team),
+    h("span", null, `score ${props.row.score} · ${props.row.latency} ms · ${props.row.status}`),
+  );
+}
+
+function ReactSSRFeedItem(props: { item: SSRFeedItemState }) {
+  return h(
+    "div",
+    { className: "bench-inline-card" },
+    h("span", null, props.item.title),
+    h("span", null, props.item.age),
+  );
+}
+
+function ReactSSRScreen(props: { state: SSRBenchmarkState }) {
+  const { state } = props;
+
+  return h(
+    "section",
+    { className: "bench-screen" },
+    h(
+      "header",
+      { className: "bench-screen-head" },
+      h(
+        "div",
+        null,
+        h("span", { className: "bench-kicker" }, "SSR Render"),
+        h("h3", { className: "bench-title" }, `${state.region} render batch ${state.renderBatch}`),
+        h("p", { className: "bench-copy" }, `Range ${state.rangeDays}d · ${state.alertCount} active alerts`),
+      ),
+      h(
+        "div",
+        { className: "bench-pill-row" },
+        h("span", { className: "bench-pill" }, `Region ${state.region}`),
+        h("span", { className: "bench-pill" }, `Rows ${state.rows.length}`),
+        h("span", { className: "bench-pill" }, `Feed ${state.feedItems.length}`),
+      ),
+    ),
+    h(
+      "section",
+      { className: "bench-kpi-grid" },
+      state.metrics.map((metric, index) => h(ReactSSRMetricCard, { key: index, metric })),
+    ),
+    h(
+      "section",
+      { className: "bench-two-col" },
+      h(
+        "article",
+        { className: "bench-card" },
+        h(
+          "div",
+          { className: "bench-subhead" },
+          h("span", null, "Service rows"),
+          h("span", null, `${state.rows.length} rows`),
+        ),
+        h(
+          "div",
+          { className: "bench-stack" },
+          state.rows.map((row, index) => h(ReactSSRRow, { key: index, row, region: state.region })),
+        ),
+      ),
+      h(
+        "article",
+        { className: "bench-card" },
+        h(
+          "div",
+          { className: "bench-subhead" },
+          h("span", null, "Activity feed"),
+          h("span", null, `${state.feedItems.length} events`),
+        ),
+        h(
+          "div",
+          { className: "bench-stack" },
+          state.feedItems.map((item, index) => h(ReactSSRFeedItem, { key: index, item })),
+        ),
+      ),
+    ),
+  );
+}
+
 function createGridController(
   suite: BenchmarkSuiteDefinition,
   container: HTMLElement,
@@ -1035,6 +1143,68 @@ function createGraphController(
   };
 }
 
+async function createSSRController(
+  suite: BenchmarkSuiteDefinition,
+  _container: HTMLElement,
+): Promise<BenchmarkController> {
+  const metricCount = getNumber(suite, "metricCount");
+  const rowCount = getNumber(suite, "tableRows");
+  const feedItemsCount = getNumber(suite, "feedItems");
+  const hotRenders = getNumber(suite, "hotRenders");
+  const refreshPasses = getNumber(suite, "refreshPasses");
+  const state = createSSRBenchmarkState(metricCount, rowCount, feedItemsCount);
+  const { renderToString: renderReactToString } = await import("react-dom/server.browser");
+  let lastHtml = "";
+
+  function renderSnapshot(): void {
+    lastHtml = renderReactToString(h(ReactSSRScreen, { state }));
+
+    if (lastHtml.length === 0) {
+      throw new Error("SSR benchmark produced an empty React render.");
+    }
+  }
+
+  function runHotRenders(iterations: number): void {
+    for (let step = 0; step < iterations; step += 1) {
+      mutateSSRHotPath(state, step);
+      renderSnapshot();
+    }
+  }
+
+  function runRefreshRenders(passes: number): void {
+    for (let pass = 0; pass < passes; pass += 1) {
+      mutateSSRFullRefresh(state, pass);
+      renderSnapshot();
+    }
+  }
+
+  renderSnapshot();
+
+  return {
+    perform(actionId) {
+      switch (actionId) {
+        case "warm-hot-ssr-rerender":
+          runHotRenders(18);
+          return;
+        case "run-hot-ssr-rerender":
+          runHotRenders(hotRenders);
+          return;
+        case "warm-refresh-ssr-rerender":
+          runRefreshRenders(2);
+          return;
+        case "run-refresh-ssr-rerender":
+          runRefreshRenders(refreshPasses);
+          return;
+        default:
+          throw new Error(`Unknown SSR action "${actionId}".`);
+      }
+    },
+    destroy() {
+      lastHtml = "";
+    },
+  };
+}
+
 export const reactBenchmarkAdapter: BenchmarkAdapter = {
   id: "react",
   label: "React (VDOM)",
@@ -1045,6 +1215,8 @@ export const reactBenchmarkAdapter: BenchmarkAdapter = {
         return createGridController(suite, container);
       case "dashboard-nested":
         return createDashboardController(suite, container);
+      case "ssr-render":
+        return createSSRController(suite, container);
       case "async-api":
         return createAsyncController(suite, container);
       case "graph-motion":

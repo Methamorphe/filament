@@ -285,6 +285,51 @@ It allows the compiler to target multiple outputs:
 
 Without a strong IR, the project risks becoming a loose collection of transforms instead of a coherent compiler pipeline.
 
+### Current v0 Template Contract
+
+Today the TypeScript transform lowers native JSX into a small shared contract consumed by both the DOM runtime and the SSR runtime.
+
+Current shape:
+
+```ts
+type TemplateIR = {
+  html: string;
+  nodeRefs: string[];
+  anchorRefs: string[];
+};
+
+type TemplateBinding =
+  | {
+      kind: "insert";
+      ref: string;
+      evaluate: () => unknown;
+    }
+  | {
+      kind: "attribute";
+      ref: string;
+      name: string;
+      evaluate: () => unknown;
+    }
+  | {
+      kind: "event";
+      ref: string;
+      name: string;
+      handler: (event: unknown) => unknown;
+    };
+```
+
+Contract rules:
+
+- `html` contains the static serialized DOM skeleton for one native JSX subtree
+- `nodeRefs` identifies elements marked in `html` that need dynamic attributes or events
+- `anchorRefs` identifies comment anchors used for dynamic child insertion
+- `insert` bindings target an anchor and restore dynamic child content
+- `attribute` bindings target an element ref and apply reactive attribute or property updates
+- `event` bindings target an element ref and attach listeners on the client; SSR ignores them structurally
+
+This v0 contract is intentionally small.
+It keeps the compiler/runtime boundary explicit while the project is still validating control flow, SSR parity, and future hydration requirements.
+
 ## Client Code Generation
 
 The client codegen step should emit code that:

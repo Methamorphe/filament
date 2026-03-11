@@ -1,6 +1,18 @@
 const ELEMENT_REF_ATTRIBUTE = "data-f-node";
 const ANCHOR_PREFIX = "filament-anchor:";
 const SSR_CHUNK = Symbol.for("filament.ssr.chunk");
+const TEMPLATE_MARKER_PATTERN = new RegExp(
+  `<!--${ANCHOR_PREFIX}([A-Za-z0-9_:-]+)-->|\\s${ELEMENT_REF_ATTRIBUTE}="([A-Za-z0-9_:-]+)"`,
+  "g",
+);
+const templatePlanCache = new Map<string, TemplatePlanPart[]>();
+
+type TemplatePlanPart =
+  | string
+  | {
+      kind: "insert" | "node";
+      ref: string;
+    };
 
 export interface SSRChunk {
   [SSR_CHUNK]: true;
@@ -61,7 +73,13 @@ export function renderSSRValue(value: unknown): string {
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => renderSSRValue(item)).join("");
+    let html = "";
+
+    for (const item of value) {
+      html += renderSSRValue(item);
+    }
+
+    return html;
   }
 
   return escapeHtml(String(value));
@@ -81,17 +99,55 @@ function renderAttribute(name: string, value: unknown): string {
   return `${normalizedName}="${escapeHtml(String(value))}"`;
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function getTemplatePlan(html: string): TemplatePlanPart[] {
+  const cached = templatePlanCache.get(html);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const parts: TemplatePlanPart[] = [];
+  let lastIndex = 0;
+  TEMPLATE_MARKER_PATTERN.lastIndex = 0;
+
+  for (let match = TEMPLATE_MARKER_PATTERN.exec(html); match !== null; match = TEMPLATE_MARKER_PATTERN.exec(html)) {
+    const markerIndex = match.index;
+
+    if (markerIndex > lastIndex) {
+      parts.push(html.slice(lastIndex, markerIndex));
+    }
+
+    const anchorRef = match[1];
+    const nodeRef = match[2];
+
+    if (anchorRef !== undefined) {
+      parts.push({ kind: "insert", ref: anchorRef });
+    } else if (nodeRef !== undefined) {
+      parts.push({ kind: "node", ref: nodeRef });
+    }
+
+    lastIndex = markerIndex + match[0].length;
+  }
+
+  if (lastIndex < html.length) {
+    parts.push(html.slice(lastIndex));
+  }
+
+  templatePlanCache.set(html, parts);
+  return parts;
 }
 
 export function createSSRTemplate(ir: SSRTemplateIR, bindings: SSRBinding[]): SSRChunk {
-  let html = ir.html;
+  if (bindings.length === 0) {
+    return createSSRChunk(ir.html);
+  }
+
+  const inserts = new Map<string, string>();
   const dynamicAttributes = new Map<string, string[]>();
 
   for (const binding of bindings) {
     if (binding.kind === "insert") {
-      html = html.replace(`<!--${ANCHOR_PREFIX}${binding.ref}-->`, renderSSRValue(binding.evaluate()));
+      inserts.set(binding.ref, renderSSRValue(binding.evaluate()));
       continue;
     }
 
@@ -112,11 +168,25 @@ export function createSSRTemplate(ir: SSRTemplateIR, bindings: SSRBinding[]): SS
     }
   }
 
-  for (const ref of ir.nodeRefs) {
-    const attributes = dynamicAttributes.get(ref) ?? [];
-    const replacement = attributes.length > 0 ? ` ${attributes.join(" ")}` : "";
-    const marker = new RegExp(`\\s${ELEMENT_REF_ATTRIBUTE}="${escapeRegExp(ref)}"`, "g");
-    html = html.replace(marker, replacement);
+  const plan = getTemplatePlan(ir.html);
+  let html = "";
+
+  for (const part of plan) {
+    if (typeof part === "string") {
+      html += part;
+      continue;
+    }
+
+    if (part.kind === "insert") {
+      html += inserts.get(part.ref) ?? "";
+      continue;
+    }
+
+    const attributes = dynamicAttributes.get(part.ref) ?? [];
+
+    if (attributes.length > 0) {
+      html += ` ${attributes.join(" ")}`;
+    }
   }
 
   return createSSRChunk(html);
