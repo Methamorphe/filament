@@ -61,6 +61,10 @@ function getExpectedRootElement(html: string): Element | null {
   return getTemplate(html).content.firstElementChild;
 }
 
+function getRootElementRef(root: Element | null): string | null {
+  return root?.getAttribute(elementRefAttribute) ?? null;
+}
+
 function matchesStructuralRoot(expected: Element, candidate: Element): boolean {
   if (expected.tagName !== candidate.tagName) {
     return false;
@@ -161,9 +165,16 @@ function resolveRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): Resol
       : root.childNodes.length === 1 && root.firstChild?.nodeType === Node.ELEMENT_NODE
         ? (root.firstChild as Element)
         : null;
+  const rootElementRef = getRootElementRef(rootElement);
 
-  if (rootElement !== null && ir.anchorRefs.length === 0 && ir.nodeRefs.length === 1) {
-    const ref = ir.nodeRefs[0]!;
+  if (
+    rootElement !== null &&
+    rootElementRef !== null &&
+    ir.anchorRefs.length === 0 &&
+    ir.nodeRefs.length === 1 &&
+    ir.nodeRefs[0] === rootElementRef
+  ) {
+    const ref = rootElementRef;
     rootElement.removeAttribute(elementRefAttribute);
 
     return {
@@ -184,10 +195,9 @@ function resolveRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): Resol
   const pendingAnchorRefs = new Set(ir.anchorRefs);
   const pendingStartRefs = new Set(ir.anchorRefs);
 
-  if (rootElement !== null && pendingNodeRefs.has(ir.nodeRefs[0] ?? "")) {
-    const rootRef = ir.nodeRefs[0]!;
-    nodes.set(rootRef, rootElement);
-    pendingNodeRefs.delete(rootRef);
+  if (rootElement !== null && rootElementRef !== null && pendingNodeRefs.has(rootElementRef)) {
+    nodes.set(rootElementRef, rootElement);
+    pendingNodeRefs.delete(rootElementRef);
     rootElement.removeAttribute(elementRefAttribute);
   }
 
@@ -224,14 +234,10 @@ function claimHydrationRoot(ir: DOMTemplateIR, boundNodeRefs: ReadonlySet<string
     throw createHydrationError("Hydration requested without an active boundary.", { boundary });
   }
 
-  const rootRef = ir.nodeRefs[0];
-
-  if (rootRef === undefined) {
-    throw new Error("Hydration requires a stable root node ref on every template.");
-  }
-
   const expectedRoot = getExpectedRootElement(ir.html);
-  const rootNeedsMarker = boundNodeRefs.has(rootRef);
+  const rootRef = getRootElementRef(expectedRoot) ?? ir.nodeRefs[0] ?? null;
+  const rootNeedsMarker =
+    rootRef !== null && getRootElementRef(expectedRoot) === rootRef && boundNodeRefs.has(rootRef);
 
   for (
     let current = boundary.cursor;
@@ -244,11 +250,15 @@ function claimHydrationRoot(ir: DOMTemplateIR, boundNodeRefs: ReadonlySet<string
 
     const element = current as Element;
 
-    if (rootNeedsMarker) {
+    if (rootNeedsMarker && rootRef !== null) {
       if (element.getAttribute(elementRefAttribute) !== rootRef) {
         continue;
       }
-    } else if (expectedRoot !== null && !matchesStructuralRoot(expectedRoot, element)) {
+    } else if (expectedRoot !== null) {
+      if (!matchesStructuralRoot(expectedRoot, element)) {
+        continue;
+      }
+    } else if (rootRef !== null && element.getAttribute(elementRefAttribute) !== rootRef) {
       continue;
     }
 
@@ -256,7 +266,7 @@ function claimHydrationRoot(ir: DOMTemplateIR, boundNodeRefs: ReadonlySet<string
     return element;
   }
 
-  if (rootNeedsMarker) {
+  if (rootNeedsMarker && rootRef !== null) {
     throw createHydrationError(`Missing hydrated root ref "${rootRef}" in DOM.`, { boundary });
   }
 

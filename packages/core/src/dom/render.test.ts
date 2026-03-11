@@ -28,6 +28,31 @@ describe("setAttributeOrProperty", () => {
 });
 
 describe("hydrate diagnostics", () => {
+  it("claims static single-root templates with no node refs", () => {
+    const container = document.createElement("div");
+
+    container.innerHTML = "<button>ready</button>";
+
+    const dispose = hydrate(
+      () =>
+        createTemplateInstance(
+          {
+            html: "<button>ready</button>",
+            nodeRefs: [],
+            anchorRefs: [],
+          },
+          [],
+        ),
+      container,
+    );
+
+    try {
+      expect(container.innerHTML).toBe("<button>ready</button>");
+    } finally {
+      dispose();
+    }
+  });
+
   it("claims unbound single-root templates without server node markers", () => {
     const container = document.createElement("div");
 
@@ -126,8 +151,8 @@ describe("template fast paths", () => {
     const walkerSpy = vi.spyOn(document, "createTreeWalker");
     const node = createTemplateInstance(
       {
-        html: '<button data-f-node="t0-n0">ready</button>',
-        nodeRefs: ["t0-n0"],
+        html: "<button>ready</button>",
+        nodeRefs: [],
         anchorRefs: [],
       },
       [],
@@ -181,5 +206,37 @@ describe("template fast paths", () => {
     expect(node.outerHTML).toContain("filament-anchor:t0-a0");
     expect(walkerSpy).toHaveBeenCalled();
     expect(walkerSpy.mock.calls.at(-1)?.[1]).toBe(NodeFilter.SHOW_COMMENT);
+  });
+
+  it("hydrates anchor-only roots without requiring a root node ref", () => {
+    const container = document.createElement("div");
+
+    container.innerHTML =
+      "<section><!--filament-start:t0-a0-->ready<!--filament-anchor:t0-a0--></section>";
+
+    const dispose = hydrate(
+      () =>
+        createTemplateInstance(
+          {
+            html: "<section><!--filament-anchor:t0-a0--></section>",
+            nodeRefs: [],
+            anchorRefs: ["t0-a0"],
+          },
+          [
+            {
+              kind: "insert",
+              ref: "t0-a0",
+              evaluate: () => "ready",
+            },
+          ],
+        ),
+      container,
+    );
+
+    try {
+      expect(container.innerHTML).toBe("<section>ready<!--filament-anchor:t0-a0--></section>");
+    } finally {
+      dispose();
+    }
   });
 });

@@ -142,4 +142,27 @@ describe("createSSRTemplate", () => {
 
     expect(result).toBe('<section><!--filament-start:a0-->Count 1<!--filament-anchor:a0--></section>');
   });
+
+  it("hydrates anchor-only roots without emitting any node markers", () => {
+    const result = renderToString(
+      () =>
+        createSSRTemplate(
+          {
+            html: "<section><!--filament-anchor:a0--></section>",
+            nodeRefs: [],
+            anchorRefs: ["a0"],
+          },
+          [
+            {
+              kind: "insert",
+              ref: "a0",
+              evaluate: () => "Count 1",
+            },
+          ],
+        ),
+      { hydrate: true },
+    );
+
+    expect(result).toBe('<section><!--filament-start:a0-->Count 1<!--filament-anchor:a0--></section>');
+  });
 });

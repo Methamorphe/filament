@@ -191,8 +191,8 @@ describe("transformFilamentModule", () => {
     });
     expect(module.captures).toHaveLength(1);
     expect(module.captures[0]?.ir).toEqual({
-      html: '<span data-f-node="t0-n0">Hi</span>',
-      nodeRefs: ["t0-n0"],
+      html: "<span>Hi</span>",
+      nodeRefs: [],
       anchorRefs: [],
     });
     expect(Array.isArray(value.children)).toBe(true);
@@ -200,8 +200,8 @@ describe("transformFilamentModule", () => {
     expect(value.children[0]).toMatchObject({
       helper: "dom",
       ir: {
-        html: '<span data-f-node="t0-n0">Hi</span>',
-        nodeRefs: ["t0-n0"],
+        html: "<span>Hi</span>",
+        nodeRefs: [],
         anchorRefs: [],
       },
     });
@@ -240,27 +240,65 @@ describe("transformFilamentModule", () => {
     expect(showValue.children()).toMatchObject({
       helper: "dom",
       ir: {
-        html: '<span data-f-node="t1-n0">ready</span>',
-        nodeRefs: ["t1-n0"],
+        html: "<span>ready</span>",
+        nodeRefs: [],
         anchorRefs: [],
       },
     });
     expect(showValue.fallback()).toMatchObject({
       helper: "dom",
       ir: {
-        html: '<span data-f-node="t0-n0">idle</span>',
-        nodeRefs: ["t0-n0"],
+        html: "<span>idle</span>",
+        nodeRefs: [],
         anchorRefs: [],
       },
     });
     expect(forValue.fallback()).toMatchObject({
       helper: "dom",
       ir: {
-        html: '<span data-f-node="t2-n0">empty</span>',
-        nodeRefs: ["t2-n0"],
+        html: "<span>empty</span>",
+        nodeRefs: [],
         anchorRefs: [],
       },
     });
+  });
+
+  it("omits root node refs for static and anchor-only native roots", async () => {
+    const source = `
+      const label = "ready";
+
+      export function StaticView() {
+        return <span>Hi</span>;
+      }
+
+      export function InsertView() {
+        return <section>{label}</section>;
+      }
+    `;
+
+    const module = await loadTransformedModule(source, { ssr: false });
+    const staticValue = module.exports.StaticView();
+    const insertValue = module.exports.InsertView();
+
+    expect(staticValue).toMatchObject({
+      helper: "dom",
+      ir: {
+        html: "<span>Hi</span>",
+        nodeRefs: [],
+        anchorRefs: [],
+      },
+    });
+    expect(insertValue).toMatchObject({
+      helper: "dom",
+      ir: {
+        html: "<section><!--filament-anchor:t1-a0--></section>",
+        nodeRefs: [],
+        anchorRefs: ["t1-a0"],
+      },
+    });
+    expect(summarizeBindings(module.captures[1]?.bindings ?? [])).toEqual([
+      { kind: "insert", ref: "t1-a0", value: "ready" },
+    ]);
   });
 
   it("collapses empty fragments to null and single-child fragments to the child value", async () => {

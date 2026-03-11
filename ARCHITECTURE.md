@@ -321,7 +321,8 @@ type TemplateBinding =
 Contract rules:
 
 - `html` contains the static serialized DOM skeleton for one native JSX subtree
-- `nodeRefs` identifies elements marked in `html`; the first ref is a stable root marker for hydration claim
+- `nodeRefs` identifies only elements that the runtime must address directly for bindings or hydration restore
+- the template root is allowed to have no node ref when it is only claimed structurally
 - `anchorRefs` identifies comment anchors used for dynamic child insertion
 - `insert` bindings target an anchor and restore dynamic child content
 - `attribute` bindings target an element ref and apply reactive attribute or property updates
@@ -330,7 +331,8 @@ Contract rules:
 Hydration metadata v0 reuses this same contract instead of introducing a second compiler shape:
 
 - hydratable SSR keeps `data-f-node="<ref>"` attributes for `nodeRefs`
-- root refs that exist only to let the client claim the template root can be omitted from SSR output; the client then claims that root structurally
+- static and anchor-only roots can omit a root node ref entirely from compiler output
+- root refs that exist only to let the client claim the template root can also be omitted from SSR output; the client then claims that root structurally
 - hydratable SSR emits `<!--filament-start:<ref>-->...<!--filament-anchor:<ref>-->` around dynamic inserts
 - `hydrate()` walks those markers, claims the existing DOM, restores effects and events, and does not rerender the subtree
 - if any `data-f-node` or `filament-start:` marker remains after hydration, the runtime fails clearly with boundary or container preview context because SSR and client structure diverged

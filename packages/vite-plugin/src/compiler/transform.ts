@@ -136,8 +136,7 @@ function compileNativeElement(node: t.JSXElement, state: PluginState): t.Express
   };
 
   const helperId = ensureHelper(state);
-  const rootRef = createNodeRef(ctx);
-  const html = compileNativeElementHtml(node, ctx, state, rootRef);
+  const html = compileNativeElementHtml(node, ctx, state);
 
   return t.callExpression(helperId, [
     t.objectExpression([
@@ -224,13 +223,13 @@ function compileNativeElementHtml(
 
     elementRef ??= createNodeRef(ctx);
     ctx.bindings.push(
-        bindingObject([
-          property("kind", t.stringLiteral("attribute")),
-          property("ref", t.stringLiteral(elementRef)),
-          property("name", t.stringLiteral(normalizedAttributeName)),
-          property("evaluate", t.arrowFunctionExpression([], expression)),
-        ]),
-      );
+      bindingObject([
+        property("kind", t.stringLiteral("attribute")),
+        property("ref", t.stringLiteral(elementRef)),
+        property("name", t.stringLiteral(normalizedAttributeName)),
+        property("evaluate", t.arrowFunctionExpression([], expression)),
+      ]),
+    );
   }
 
   const attributes = [...staticAttributes];
