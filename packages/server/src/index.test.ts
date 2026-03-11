@@ -88,4 +88,35 @@ describe("createSSRTemplate", () => {
 
     expect(renderToString(() => card)).toBe("<div><strong>Hi</strong> &lt;ok&gt;</div>");
   });
+
+  it("keeps root and insert metadata when hydration markers are requested", () => {
+    const result = renderToString(
+      () =>
+        createSSRTemplate(
+        {
+          html: '<button data-f-node="n0"><!--filament-anchor:a0--></button>',
+          nodeRefs: ["n0"],
+          anchorRefs: ["a0"],
+        },
+        [
+          {
+            kind: "event",
+            ref: "n0",
+            name: "click",
+            handler: () => undefined,
+          },
+          {
+            kind: "insert",
+            ref: "a0",
+            evaluate: () => "Count 1",
+          },
+        ],
+        ),
+      { hydrate: true },
+    );
+
+    expect(result).toBe(
+      '<button data-f-node="n0"><!--filament-start:a0-->Count 1<!--filament-anchor:a0--></button>',
+    );
+  });
 });

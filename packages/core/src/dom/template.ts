@@ -1,10 +1,21 @@
 import { effect, onCleanup } from "../reactivity/signal.js";
+import {
+  getHydrationBoundary,
+  withHydrationBoundary,
+} from "./hydration.js";
 import { mountValueBeforeAnchor, setAttributeOrProperty } from "./render.js";
 import type { DOMBinding, DOMTemplateIR } from "./types.js";
 
 const templateCache = new Map<string, HTMLTemplateElement>();
 const elementRefAttribute = "data-f-node";
 const anchorPrefix = "filament-anchor:";
+const hydrationStartPrefix = "filament-start:";
+
+interface ResolvedRefs {
+  nodes: Map<string, Element>;
+  anchors: Map<string, Comment>;
+  starts: Map<string, Comment>;
+}
 
 function getTemplate(html: string): HTMLTemplateElement {
   let template = templateCache.get(html);
@@ -23,51 +34,138 @@ function cloneTemplate(html: string): DocumentFragment {
   return getTemplate(html).content.cloneNode(true) as DocumentFragment;
 }
 
-function resolveRefs(fragment: DocumentFragment, ir: DOMTemplateIR) {
+function inspectRefNode(
+  current: Node,
+  pendingNodeRefs: Set<string>,
+  pendingAnchorRefs: Set<string>,
+  nodes: Map<string, Element>,
+  anchors: Map<string, Comment>,
+  starts: Map<string, Comment>,
+): void {
+  if (current.nodeType === Node.ELEMENT_NODE) {
+    const element = current as Element;
+    const ref = element.getAttribute(elementRefAttribute);
+
+    if (ref !== null && pendingNodeRefs.has(ref)) {
+      nodes.set(ref, element);
+      element.removeAttribute(elementRefAttribute);
+    }
+
+    return;
+  }
+
+  if (current.nodeType !== Node.COMMENT_NODE) {
+    return;
+  }
+
+  const comment = current as Comment;
+
+  if (comment.data.startsWith(anchorPrefix)) {
+    const ref = comment.data.slice(anchorPrefix.length);
+
+    if (pendingAnchorRefs.has(ref)) {
+      anchors.set(ref, comment);
+    }
+
+    return;
+  }
+
+  if (comment.data.startsWith(hydrationStartPrefix)) {
+    const ref = comment.data.slice(hydrationStartPrefix.length);
+
+    if (pendingAnchorRefs.has(ref)) {
+      starts.set(ref, comment);
+    }
+  }
+}
+
+function resolveRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): ResolvedRefs {
   const nodes = new Map<string, Element>();
   const anchors = new Map<string, Comment>();
+  const starts = new Map<string, Comment>();
   const pendingNodeRefs = new Set(ir.nodeRefs);
   const pendingAnchorRefs = new Set(ir.anchorRefs);
-  const walker = document.createTreeWalker(
-    fragment,
-    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_COMMENT,
-  );
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_COMMENT);
+
+  inspectRefNode(root, pendingNodeRefs, pendingAnchorRefs, nodes, anchors, starts);
 
   while (walker.nextNode() !== null) {
-    const current = walker.currentNode;
+    inspectRefNode(walker.currentNode, pendingNodeRefs, pendingAnchorRefs, nodes, anchors, starts);
+  }
 
-    if (current.nodeType === Node.ELEMENT_NODE) {
-      const element = current as Element;
-      const ref = element.getAttribute(elementRefAttribute);
+  return { nodes, anchors, starts };
+}
 
-      if (ref !== null && pendingNodeRefs.has(ref)) {
-        nodes.set(ref, element);
-        element.removeAttribute(elementRefAttribute);
-      }
+function claimHydrationRoot(ir: DOMTemplateIR): Element {
+  const boundary = getHydrationBoundary();
 
+  if (boundary === null) {
+    throw new Error("Hydration requested without an active boundary.");
+  }
+
+  const rootRef = ir.nodeRefs[0];
+
+  if (rootRef === undefined) {
+    throw new Error("Hydration requires a stable root node ref on every template.");
+  }
+
+  for (
+    let current = boundary.cursor;
+    current !== boundary.end && current !== null;
+    current = current.nextSibling
+  ) {
+    if (current.nodeType !== Node.ELEMENT_NODE) {
       continue;
     }
 
-    if (current.nodeType === Node.COMMENT_NODE) {
-      const comment = current as Comment;
+    const element = current as Element;
 
-      if (comment.data.startsWith(anchorPrefix)) {
-        const ref = comment.data.slice(anchorPrefix.length);
-
-        if (pendingAnchorRefs.has(ref)) {
-          anchors.set(ref, comment);
-        }
-      }
+    if (element.getAttribute(elementRefAttribute) !== rootRef) {
+      continue;
     }
+
+    boundary.cursor = element.nextSibling;
+    return element;
   }
 
-  return { nodes, anchors };
+  throw new Error(`Missing hydrated root ref "${rootRef}" in DOM.`);
 }
 
-function mountInsertBinding(anchor: Comment, evaluate: () => unknown): void {
-  let currentNodes: Node[] = [];
+function collectHydratedInsertNodes(start: Comment, anchor: Comment): Node[] {
+  if (start.parentNode !== anchor.parentNode || start.parentNode === null) {
+    throw new Error("Hydration markers must share the same parent node.");
+  }
+
+  const nodes: Node[] = [];
+
+  for (let current = start.nextSibling; current !== null && current !== anchor; current = current.nextSibling) {
+    nodes.push(current);
+  }
+
+  return nodes;
+}
+
+function mountInsertBinding(anchor: Comment, evaluate: () => unknown, start?: Comment): void {
+  let currentNodes: Node[] = start === undefined ? [] : collectHydratedInsertNodes(start, anchor);
+  let hydrating = start !== undefined;
 
   effect(() => {
+    if (hydrating) {
+      const parent = anchor.parentNode;
+
+      if (parent === null) {
+        throw new Error("Hydrated insert anchor is missing its parent node.");
+      }
+
+      withHydrationBoundary(parent, start?.nextSibling ?? anchor, anchor, () => {
+        void evaluate();
+      });
+
+      start?.parentNode?.removeChild(start);
+      hydrating = false;
+      return;
+    }
+
     currentNodes = mountValueBeforeAnchor(anchor, currentNodes, evaluate() as never);
   });
 }
@@ -93,8 +191,9 @@ function mountEventBinding(
 }
 
 export function createTemplateInstance(ir: DOMTemplateIR, bindings: DOMBinding[]): Node {
-  const fragment = cloneTemplate(ir.html);
-  const refs = resolveRefs(fragment, ir);
+  const boundary = getHydrationBoundary();
+  const root = boundary === null ? cloneTemplate(ir.html) : claimHydrationRoot(ir);
+  const refs = resolveRefs(root, ir);
 
   for (const binding of bindings) {
     if (binding.kind === "insert") {
@@ -104,7 +203,7 @@ export function createTemplateInstance(ir: DOMTemplateIR, bindings: DOMBinding[]
         throw new Error(`Missing anchor ref "${binding.ref}" in template.`);
       }
 
-      mountInsertBinding(anchor, binding.evaluate);
+      mountInsertBinding(anchor, binding.evaluate, refs.starts.get(binding.ref));
       continue;
     }
 
@@ -122,5 +221,9 @@ export function createTemplateInstance(ir: DOMTemplateIR, bindings: DOMBinding[]
     mountEventBinding(element, binding.name, binding.handler);
   }
 
-  return fragment.childNodes.length === 1 ? fragment.firstChild! : fragment;
+  if (root instanceof DocumentFragment) {
+    return root.childNodes.length === 1 ? root.firstChild! : root;
+  }
+
+  return root;
 }

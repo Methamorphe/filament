@@ -191,8 +191,8 @@ describe("transformFilamentModule", () => {
     });
     expect(module.captures).toHaveLength(1);
     expect(module.captures[0]?.ir).toEqual({
-      html: "<span>Hi</span>",
-      nodeRefs: [],
+      html: '<span data-f-node="n0">Hi</span>',
+      nodeRefs: ["n0"],
       anchorRefs: [],
     });
     expect(Array.isArray(value.children)).toBe(true);
@@ -200,8 +200,8 @@ describe("transformFilamentModule", () => {
     expect(value.children[0]).toMatchObject({
       helper: "dom",
       ir: {
-        html: "<span>Hi</span>",
-        nodeRefs: [],
+        html: '<span data-f-node="n0">Hi</span>',
+        nodeRefs: ["n0"],
         anchorRefs: [],
       },
     });

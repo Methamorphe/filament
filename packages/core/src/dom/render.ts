@@ -1,4 +1,5 @@
 import { createRoot, onCleanup } from "../reactivity/signal.js";
+import { beginHydration, endHydration } from "./hydration.js";
 import type { Child } from "./types.js";
 
 function isNode(value: unknown): value is Node {
@@ -109,6 +110,24 @@ export function render(factory: () => Child, container: Element): () => void {
     onCleanup(() => {
       container.replaceChildren();
     });
+    return dispose;
+  });
+}
+
+export function hydrate(factory: () => Child, container: Element): () => void {
+  return createRoot((dispose) => {
+    beginHydration(container);
+
+    try {
+      void factory();
+    } finally {
+      endHydration();
+    }
+
+    onCleanup(() => {
+      container.replaceChildren();
+    });
+
     return dispose;
   });
 }

@@ -132,7 +132,8 @@ function compileNativeElement(node: t.JSXElement, state: PluginState): t.Express
   };
 
   const helperId = ensureHelper(state);
-  const html = compileNativeElementHtml(node, ctx, state);
+  const rootRef = createNodeRef(ctx);
+  const html = compileNativeElementHtml(node, ctx, state, rootRef);
 
   return t.callExpression(helperId, [
     t.objectExpression([
@@ -154,10 +155,11 @@ function compileNativeElementHtml(
   node: t.JSXElement,
   ctx: TemplateContext,
   state: PluginState,
+  forcedElementRef: string | null = null,
 ): string {
   const tagName = jsxNameToString(node.openingElement.name);
   const staticAttributes: string[] = [];
-  let elementRef: string | null = null;
+  let elementRef: string | null = forcedElementRef;
 
   for (const attribute of node.openingElement.attributes) {
     if (t.isJSXSpreadAttribute(attribute)) {

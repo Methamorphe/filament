@@ -191,6 +191,8 @@ Client runtime primitives:
 - `effect`
 - `batch`
 - `onCleanup`
+- `render`
+- `hydrate`
 - `Show`
 - `For`
 
@@ -209,7 +211,7 @@ SSR helpers:
 
 - component rendering
 - HTML serialization
-- hydration metadata emission
+- optional hydration metadata emission via `renderToString(..., { hydrate: true })`
 - future streaming support
 
 ### `create-filament`

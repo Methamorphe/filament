@@ -1,11 +1,16 @@
 const ELEMENT_REF_ATTRIBUTE = "data-f-node";
 const ANCHOR_PREFIX = "filament-anchor:";
+const HYDRATION_START_PREFIX = "filament-start:";
 const SSR_CHUNK = Symbol.for("filament.ssr.chunk");
 const TEMPLATE_MARKER_PATTERN = new RegExp(
   `<!--${ANCHOR_PREFIX}([A-Za-z0-9_:-]+)-->|\\s${ELEMENT_REF_ATTRIBUTE}="([A-Za-z0-9_:-]+)"`,
   "g",
 );
 const templatePlanCache = new Map<string, TemplatePlanPart[]>();
+
+interface RenderContext {
+  hydrate: boolean;
+}
 
 type TemplatePlanPart =
   | string
@@ -44,11 +49,28 @@ export type SSRBinding =
       handler: (event: unknown) => unknown;
     };
 
+const defaultRenderContext: RenderContext = {
+  hydrate: false,
+};
+
+let currentRenderContext = defaultRenderContext;
+
 function createSSRChunk(html: string): SSRChunk {
   return {
     [SSR_CHUNK]: true,
     html,
   };
+}
+
+export function withServerRenderContext<T>(context: RenderContext, fn: () => T): T {
+  const previous = currentRenderContext;
+  currentRenderContext = context;
+
+  try {
+    return fn();
+  } finally {
+    currentRenderContext = previous;
+  }
 }
 
 function isSSRChunk(value: unknown): value is SSRChunk {
@@ -138,12 +160,9 @@ function getTemplatePlan(html: string): TemplatePlanPart[] {
 }
 
 export function createSSRTemplate(ir: SSRTemplateIR, bindings: SSRBinding[]): SSRChunk {
-  if (bindings.length === 0) {
-    return createSSRChunk(ir.html);
-  }
-
   const inserts = new Map<string, string>();
   const dynamicAttributes = new Map<string, string[]>();
+  const shouldHydrate = currentRenderContext.hydrate;
 
   for (const binding of bindings) {
     if (binding.kind === "insert") {
@@ -178,14 +197,22 @@ export function createSSRTemplate(ir: SSRTemplateIR, bindings: SSRBinding[]): SS
     }
 
     if (part.kind === "insert") {
-      html += inserts.get(part.ref) ?? "";
+      const rendered = inserts.get(part.ref) ?? "";
+
+      if (shouldHydrate) {
+        html += `<!--${HYDRATION_START_PREFIX}${part.ref}-->${rendered}<!--${ANCHOR_PREFIX}${part.ref}-->`;
+      } else {
+        html += rendered;
+      }
+
       continue;
     }
 
     const attributes = dynamicAttributes.get(part.ref) ?? [];
+    const hydrationMarker = shouldHydrate ? `${ELEMENT_REF_ATTRIBUTE}="${part.ref}"` : "";
 
-    if (attributes.length > 0) {
-      html += ` ${attributes.join(" ")}`;
+    if (attributes.length > 0 || hydrationMarker !== "") {
+      html += ` ${[hydrationMarker, ...attributes].filter(Boolean).join(" ")}`;
     }
   }
 

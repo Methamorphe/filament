@@ -321,11 +321,17 @@ type TemplateBinding =
 Contract rules:
 
 - `html` contains the static serialized DOM skeleton for one native JSX subtree
-- `nodeRefs` identifies elements marked in `html` that need dynamic attributes or events
+- `nodeRefs` identifies elements marked in `html`; the first ref is a stable root marker for hydration claim
 - `anchorRefs` identifies comment anchors used for dynamic child insertion
 - `insert` bindings target an anchor and restore dynamic child content
 - `attribute` bindings target an element ref and apply reactive attribute or property updates
 - `event` bindings target an element ref and attach listeners on the client; SSR ignores them structurally
+
+Hydration metadata v0 reuses this same contract instead of introducing a second compiler shape:
+
+- hydratable SSR keeps `data-f-node="<ref>"` attributes for `nodeRefs`
+- hydratable SSR emits `<!--filament-start:<ref>-->...<!--filament-anchor:<ref>-->` around dynamic inserts
+- `hydrate()` walks those markers, claims the existing DOM, restores effects and events, and does not rerender the subtree
 
 This v0 contract is intentionally small.
 It keeps the compiler/runtime boundary explicit while the project is still validating control flow, SSR parity, and future hydration requirements.
