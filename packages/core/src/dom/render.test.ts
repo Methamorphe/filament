@@ -158,4 +158,28 @@ describe("template fast paths", () => {
     expect(node.outerHTML).toBe('<button class="hot">ready</button>');
     expect(walkerSpy).not.toHaveBeenCalled();
   });
+
+  it("walks only comments when the root is already resolved and only anchors remain", () => {
+    const walkerSpy = vi.spyOn(document, "createTreeWalker");
+
+    const node = createTemplateInstance(
+      {
+        html: '<section data-f-node="t0-n0"><!--filament-anchor:t0-a0--></section>',
+        nodeRefs: ["t0-n0"],
+        anchorRefs: ["t0-a0"],
+      },
+      [
+        {
+          kind: "insert",
+          ref: "t0-a0",
+          evaluate: () => "ready",
+        },
+      ],
+    ) as HTMLElement;
+
+    expect(node.outerHTML).toContain("ready");
+    expect(node.outerHTML).toContain("filament-anchor:t0-a0");
+    expect(walkerSpy).toHaveBeenCalled();
+    expect(walkerSpy.mock.calls.at(-1)?.[1]).toBe(NodeFilter.SHOW_COMMENT);
+  });
 });

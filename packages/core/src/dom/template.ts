@@ -109,6 +109,7 @@ function inspectRefNode(
   current: Node,
   pendingNodeRefs: Set<string>,
   pendingAnchorRefs: Set<string>,
+  pendingStartRefs: Set<string>,
   nodes: Map<string, Element>,
   anchors: Map<string, Comment>,
   starts: Map<string, Comment>,
@@ -119,6 +120,7 @@ function inspectRefNode(
 
     if (ref !== null && pendingNodeRefs.has(ref) && !nodes.has(ref)) {
       nodes.set(ref, element);
+      pendingNodeRefs.delete(ref);
       element.removeAttribute(elementRefAttribute);
     }
 
@@ -136,6 +138,7 @@ function inspectRefNode(
 
     if (pendingAnchorRefs.has(ref) && !anchors.has(ref)) {
       anchors.set(ref, comment);
+      pendingAnchorRefs.delete(ref);
     }
 
     return;
@@ -144,8 +147,9 @@ function inspectRefNode(
   if (comment.data.startsWith(hydrationStartPrefix)) {
     const ref = comment.data.slice(hydrationStartPrefix.length);
 
-    if (pendingAnchorRefs.has(ref) && !starts.has(ref)) {
+    if (pendingStartRefs.has(ref) && !starts.has(ref)) {
       starts.set(ref, comment);
+      pendingStartRefs.delete(ref);
     }
   }
 }
@@ -178,12 +182,36 @@ function resolveRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): Resol
   const starts = new Map<string, Comment>();
   const pendingNodeRefs = new Set(ir.nodeRefs);
   const pendingAnchorRefs = new Set(ir.anchorRefs);
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_COMMENT);
+  const pendingStartRefs = new Set(ir.anchorRefs);
 
-  inspectRefNode(root, pendingNodeRefs, pendingAnchorRefs, nodes, anchors, starts);
+  if (rootElement !== null && pendingNodeRefs.has(ir.nodeRefs[0] ?? "")) {
+    const rootRef = ir.nodeRefs[0]!;
+    nodes.set(rootRef, rootElement);
+    pendingNodeRefs.delete(rootRef);
+    rootElement.removeAttribute(elementRefAttribute);
+  }
 
-  while (walker.nextNode() !== null) {
-    inspectRefNode(walker.currentNode, pendingNodeRefs, pendingAnchorRefs, nodes, anchors, starts);
+  if (pendingNodeRefs.size === 0 && pendingAnchorRefs.size === 0 && pendingStartRefs.size === 0) {
+    return { nodes, anchors, starts };
+  }
+
+  const whatToShow =
+    (pendingNodeRefs.size > 0 ? NodeFilter.SHOW_ELEMENT : 0) |
+    (pendingAnchorRefs.size > 0 || pendingStartRefs.size > 0 ? NodeFilter.SHOW_COMMENT : 0);
+  const walker = document.createTreeWalker(root, whatToShow);
+
+  inspectRefNode(root, pendingNodeRefs, pendingAnchorRefs, pendingStartRefs, nodes, anchors, starts);
+
+  while (walker.nextNode() !== null && (pendingNodeRefs.size > 0 || pendingAnchorRefs.size > 0 || pendingStartRefs.size > 0)) {
+    inspectRefNode(
+      walker.currentNode,
+      pendingNodeRefs,
+      pendingAnchorRefs,
+      pendingStartRefs,
+      nodes,
+      anchors,
+      starts,
+    );
   }
 
   return { nodes, anchors, starts };
