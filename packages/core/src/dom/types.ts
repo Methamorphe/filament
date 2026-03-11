@@ -11,6 +11,7 @@ export type Child =
 export type Component<Props = Record<string, unknown>> = (props: Props) => Child;
 
 export type MaybeAccessor<T> = T | (() => T);
+export type LazyChild = Child | (() => Child);
 
 export interface DOMTemplateIR {
   html: string;
@@ -39,13 +40,12 @@ export type DOMBinding =
 
 export interface ShowProps<T> {
   when: MaybeAccessor<T>;
-  children: Child | ((value: NonNullable<T>) => Child);
-  fallback?: Child;
+  children: LazyChild | ((value: NonNullable<T>) => Child);
+  fallback?: LazyChild;
 }
 
 export interface ForProps<T> {
   each: MaybeAccessor<readonly T[] | T[]>;
   children: (item: T, index: () => number) => Child;
-  fallback?: Child;
+  fallback?: LazyChild;
 }
-

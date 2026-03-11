@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { createTemplateInstance } from "@filament/core/internal";
-import { hydrate, render, signal, type Signal } from "@filament/core";
+import { For, Show, hydrate, onCleanup, render, signal, type Signal } from "@filament/core";
 import { createSSRTemplate, renderToString } from "@filament/server";
 import { transformFilamentModule } from "../../../packages/vite-plugin/src/compiler/transform";
 import type { TransformOptions } from "../../../packages/vite-plugin/src/compiler/ir";
@@ -399,6 +399,252 @@ describe("compiler DOM/SSR parity", () => {
 
       expect(container.querySelector('[data-kind="lead"]')?.textContent).toBe("Core");
       expect(container.querySelector('[data-kind="status"]')?.textContent).toBe("Live");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("hydrates Show branches and keeps branch switching live after restore", () => {
+    const source = `
+      export const current = signal({ label: "ready" });
+
+      export function View() {
+        return (
+          <section>
+            <Show when={current} fallback={<span data-state="idle">idle</span>}>
+              {(value) => <button data-state="ready">{value.label}</button>}
+            </Show>
+          </section>
+        );
+      }
+    `;
+    const scope = { Show, signal };
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View", "current"],
+      createTemplateInstance,
+      scope,
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View"],
+      createSSRTemplate,
+      scope,
+    );
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const current = domModule.current as Signal<{ label: string } | null>;
+    const container = document.createElement("div");
+
+    container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
+
+    const dispose = hydrate(() => domView() as never, container);
+
+    try {
+      expect(container.querySelector('[data-state="ready"]')?.textContent).toBe("ready");
+
+      current.set(null);
+      expect(container.querySelector('[data-state="idle"]')?.textContent).toBe("idle");
+
+      current.set({ label: "done" });
+      expect(container.querySelector('[data-state="ready"]')?.textContent).toBe("done");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("disposes hydrated Show branch owners when the active branch changes", () => {
+    const source = `
+      export const visible = signal(true);
+
+      function Live() {
+        onCleanup(() => recordCleanup("live"));
+        return <button data-state="live">live</button>;
+      }
+
+      function Idle() {
+        onCleanup(() => recordCleanup("idle"));
+        return <span data-state="idle">idle</span>;
+      }
+
+      export function View() {
+        return (
+          <section>
+            <Show when={visible()} fallback={<Idle />}>
+              <Live />
+            </Show>
+          </section>
+        );
+      }
+    `;
+    const cleanups: string[] = [];
+    const domScope = { Show, onCleanup, recordCleanup: (label: string) => cleanups.push(label), signal };
+    const ssrScope = { Show, onCleanup: () => undefined, recordCleanup: () => undefined, signal };
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View", "visible"],
+      createTemplateInstance,
+      domScope,
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View"],
+      createSSRTemplate,
+      ssrScope,
+    );
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const visible = domModule.visible as Signal<boolean>;
+    const container = document.createElement("div");
+
+    container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
+
+    const dispose = hydrate(() => domView() as never, container);
+
+    try {
+      expect(container.querySelector('[data-state="live"]')?.textContent).toBe("live");
+
+      visible.set(false);
+
+      expect(cleanups).toEqual(["live"]);
+      expect(container.querySelector('[data-state="idle"]')?.textContent).toBe("idle");
+
+      visible.set(true);
+
+      expect(cleanups).toEqual(["live", "idle"]);
+      expect(container.querySelector('[data-state="live"]')?.textContent).toBe("live");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("hydrates For lists and preserves keyed DOM identity across reorders", () => {
+    const source = `
+      export const a = { id: "a", label: "alpha" };
+      export const b = { id: "b", label: "beta" };
+      export const c = { id: "c", label: "gamma" };
+      export const items = signal([a, b, c]);
+
+      export function View() {
+        return (
+          <section>
+            <For each={items} fallback={<span data-state="empty">empty</span>}>
+              {(item, index) => <button data-id={item.id}>{item.label}:{index()}</button>}
+            </For>
+          </section>
+        );
+      }
+    `;
+    const scope = { For, signal };
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View", "items", "a", "b", "c"],
+      createTemplateInstance,
+      scope,
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View"],
+      createSSRTemplate,
+      scope,
+    );
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const items = domModule.items as Signal<Array<{ id: string; label: string }>>;
+    const a = domModule.a as { id: string; label: string };
+    const b = domModule.b as { id: string; label: string };
+    const c = domModule.c as { id: string; label: string };
+    const container = document.createElement("div");
+
+    container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
+
+    const dispose = hydrate(() => domView() as never, container);
+
+    try {
+      const initialButtons = Array.from(container.querySelectorAll("button"));
+
+      expect(initialButtons.map((button) => button.textContent)).toEqual(["alpha:0", "beta:1", "gamma:2"]);
+
+      items.set([c, a, b]);
+
+      const reorderedButtons = Array.from(container.querySelectorAll("button"));
+
+      expect(reorderedButtons.map((button) => button.textContent)).toEqual(["gamma:0", "alpha:1", "beta:2"]);
+      expect(reorderedButtons[0]).toBe(initialButtons[2]);
+      expect(reorderedButtons[1]).toBe(initialButtons[0]);
+      expect(reorderedButtons[2]).toBe(initialButtons[1]);
+
+      items.set([]);
+      expect(container.querySelector('[data-state="empty"]')?.textContent).toBe("empty");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("disposes hydrated For item owners when keyed entries are removed", () => {
+    const source = `
+      export const a = { id: "a", label: "alpha" };
+      export const b = { id: "b", label: "beta" };
+      export const items = signal([a, b]);
+
+      function Row(props) {
+        onCleanup(() => recordCleanup(props.item.id));
+        return <button data-id={props.item.id}>{props.item.label}</button>;
+      }
+
+      export function View() {
+        return (
+          <section>
+            <For each={items} fallback={<span data-state="empty">empty</span>}>
+              {(item) => <Row item={item} />}
+            </For>
+          </section>
+        );
+      }
+    `;
+    const cleanups: string[] = [];
+    const domScope = { For, onCleanup, recordCleanup: (label: string) => cleanups.push(label), signal };
+    const ssrScope = { For, onCleanup: () => undefined, recordCleanup: () => undefined, signal };
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View", "items", "b"],
+      createTemplateInstance,
+      domScope,
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View"],
+      createSSRTemplate,
+      ssrScope,
+    );
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const items = domModule.items as Signal<Array<{ id: string; label: string }>>;
+    const b = domModule.b as { id: string; label: string };
+    const container = document.createElement("div");
+
+    container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
+
+    const dispose = hydrate(() => domView() as never, container);
+
+    try {
+      items.set([b]);
+
+      expect(cleanups).toEqual(["a"]);
+      expect(Array.from(container.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["beta"]);
+
+      items.set([]);
+
+      expect(cleanups).toEqual(["a", "b"]);
+      expect(container.querySelector('[data-state="empty"]')?.textContent).toBe("empty");
     } finally {
       dispose();
     }

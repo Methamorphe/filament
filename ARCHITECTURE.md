@@ -394,6 +394,7 @@ This requires:
 - an owner scope per branch
 - branch disposal
 - DOM anchor management
+- SSR range markers so the active branch can be claimed during hydration
 
 ### `For`
 
@@ -402,6 +403,7 @@ Keyed list rendering requires:
 - stable identity tracking
 - item scope ownership
 - efficient insert, move, and remove behavior
+- SSR item-range markers so existing list items can be restored without a full rerender
 
 Filament should not implement list updates as a generic tree diff.
 It should use a specialized keyed-list strategy.

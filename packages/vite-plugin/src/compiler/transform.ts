@@ -313,6 +313,8 @@ function compileEmbeddedValue(expression: t.Expression, state: PluginState): t.E
 
 function compileComponentElement(node: t.JSXElement, state: PluginState): t.Expression {
   const callee = jsxComponentToExpression(node.openingElement.name);
+  const isShowComponent = isNamedComponent(node.openingElement.name, "Show");
+  const isForComponent = isNamedComponent(node.openingElement.name, "For");
   const props: Array<t.ObjectProperty | t.SpreadElement> = [];
 
   for (const attribute of node.openingElement.attributes) {
@@ -321,9 +323,15 @@ function compileComponentElement(node: t.JSXElement, state: PluginState): t.Expr
       continue;
     }
 
-    const key = propKey(jsxAttributeName(attribute.name));
+    const attributeName = jsxAttributeName(attribute.name);
+    const key = propKey(attributeName);
     const value = compileComponentAttributeValue(attribute.value, state);
     props.push(t.objectProperty(key, value));
+
+    if ((isShowComponent || isForComponent) && attributeName === "fallback") {
+      const lazyValue = wrapLazyControlFlowExpression(value);
+      props[props.length - 1] = t.objectProperty(key, lazyValue);
+    }
   }
 
   const children = node.children
@@ -331,9 +339,17 @@ function compileComponentElement(node: t.JSXElement, state: PluginState): t.Expr
     .filter((value): value is t.Expression => value !== null);
 
   if (children.length === 1) {
-    props.push(t.objectProperty(propKey("children"), children[0]));
+    props.push(
+      t.objectProperty(
+        propKey("children"),
+        isShowComponent ? wrapShowChildExpression(children[0]) : children[0],
+      ),
+    );
   } else if (children.length > 1) {
-    props.push(t.objectProperty(propKey("children"), t.arrayExpression(children)));
+    const value = t.arrayExpression(children);
+    props.push(
+      t.objectProperty(propKey("children"), isShowComponent ? wrapLazyControlFlowExpression(value) : value),
+    );
   }
 
   return t.callExpression(callee, [t.objectExpression(props)]);
@@ -422,6 +438,22 @@ function propKey(name: string): t.Identifier | t.StringLiteral {
   return isIdentifierName(name) ? t.identifier(name) : t.stringLiteral(name);
 }
 
+function wrapLazyControlFlowExpression(value: t.Expression): t.Expression {
+  return isCallableExpression(value) ? value : t.arrowFunctionExpression([], value);
+}
+
+function wrapShowChildExpression(value: t.Expression): t.Expression {
+  if (!isCallableExpression(value)) {
+    return t.arrowFunctionExpression([], value);
+  }
+
+  if ((t.isArrowFunctionExpression(value) || t.isFunctionExpression(value)) && value.params.length > 0) {
+    return value;
+  }
+
+  return value;
+}
+
 function createNodeRef(ctx: TemplateContext): string {
   const ref = `t${ctx.templateId}-n${ctx.nextNodeRef++}`;
   ctx.nodeRefs.push(ref);
@@ -442,6 +474,13 @@ function createTemplateId(state: PluginState): number {
 
 function isNativeElement(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): boolean {
   return t.isJSXIdentifier(name) && /^[a-z]/.test(name.name);
+}
+
+function isNamedComponent(
+  name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName,
+  expected: string,
+): boolean {
+  return t.isJSXIdentifier(name) && name.name === expected;
 }
 
 function jsxNameToString(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): string {
@@ -570,4 +609,10 @@ function staticExpressionValue(expression: t.Expression): string | number | bool
 
 function isIdentifierName(value: string): boolean {
   return /^[$A-Z_][0-9A-Z_$]*$/i.test(value);
+}
+
+function isCallableExpression(
+  value: t.Expression,
+): value is t.ArrowFunctionExpression | t.FunctionExpression {
+  return t.isArrowFunctionExpression(value) || t.isFunctionExpression(value);
 }

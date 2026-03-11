@@ -208,6 +208,61 @@ describe("transformFilamentModule", () => {
     expect(value.children[1]).toBe("!");
   });
 
+  it("wraps Show and For control-flow fallbacks lazily", async () => {
+    const source = `
+      const Show = (props) => props;
+      const For = (props) => props;
+
+      export function ShowView() {
+        return (
+          <Show when={true} fallback={<span>idle</span>}>
+            <span>ready</span>
+          </Show>
+        );
+      }
+
+      export function ForView() {
+        return (
+          <For each={[1]} fallback={<span>empty</span>}>
+            {(item) => <span>{item}</span>}
+          </For>
+        );
+      }
+    `;
+
+    const module = await loadTransformedModule(source, { ssr: false });
+    const showValue = module.exports.ShowView();
+    const forValue = module.exports.ForView();
+
+    expect(typeof showValue.children).toBe("function");
+    expect(typeof showValue.fallback).toBe("function");
+    expect(typeof forValue.fallback).toBe("function");
+    expect(showValue.children()).toMatchObject({
+      helper: "dom",
+      ir: {
+        html: '<span data-f-node="t1-n0">ready</span>',
+        nodeRefs: ["t1-n0"],
+        anchorRefs: [],
+      },
+    });
+    expect(showValue.fallback()).toMatchObject({
+      helper: "dom",
+      ir: {
+        html: '<span data-f-node="t0-n0">idle</span>',
+        nodeRefs: ["t0-n0"],
+        anchorRefs: [],
+      },
+    });
+    expect(forValue.fallback()).toMatchObject({
+      helper: "dom",
+      ir: {
+        html: '<span data-f-node="t2-n0">empty</span>',
+        nodeRefs: ["t2-n0"],
+        anchorRefs: [],
+      },
+    });
+  });
+
   it("collapses empty fragments to null and single-child fragments to the child value", async () => {
     const source = `
       export function Empty() {
