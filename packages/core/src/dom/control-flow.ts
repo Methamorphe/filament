@@ -382,7 +382,11 @@ export function For<T>(props: ForProps<T>): Child {
 
     if (items.length === 0) {
       if (props.fallback !== undefined) {
-        output.push(createSSRComment(forFallbackStart(id)), props.fallback, createSSRComment(forFallbackEnd(id)));
+        output.push(
+          createSSRComment(forFallbackStart(id)),
+          resolveLazyChild(props.fallback),
+          createSSRComment(forFallbackEnd(id)),
+        );
       }
     } else {
       for (let index = 0; index < items.length; index += 1) {
@@ -424,13 +428,30 @@ export function For<T>(props: ForProps<T>): Child {
       currentEntries = [];
 
       if (fallbackRange === null && props.fallback !== undefined) {
-        fallbackRange = createMountedRange(
-          rangeId === null ? "filament-for:fallback:start" : forFallbackStart(rangeId),
-          rangeId === null ? "filament-for:fallback:end" : forFallbackEnd(rangeId),
-          () => resolveLazyChild(props.fallback),
-          scopeOwner,
-          hydrating,
-        );
+        if (hydrating) {
+          const parent = range.end.parentNode;
+
+          if (parent === null) {
+            throw new Error("Hydrated For fallback range is missing its parent node.");
+          }
+
+          fallbackRange = withHydrationBoundary(parent, range.start.nextSibling, range.end, () =>
+            createMountedRange(
+              forFallbackStart(rangeId!),
+              forFallbackEnd(rangeId!),
+              () => resolveLazyChild(props.fallback),
+              scopeOwner,
+              true,
+            ),
+          );
+        } else {
+          fallbackRange = createMountedRange(
+            rangeId === null ? "filament-for:fallback:start" : forFallbackStart(rangeId),
+            rangeId === null ? "filament-for:fallback:end" : forFallbackEnd(rangeId),
+            () => resolveLazyChild(props.fallback),
+            scopeOwner,
+          );
+        }
 
         if (!hydrating) {
           insertRangeBeforeAnchor(fallbackRange.start, fallbackRange.end, range.end);

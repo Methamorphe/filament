@@ -649,4 +649,82 @@ describe("compiler DOM/SSR parity", () => {
       dispose();
     }
   });
+
+  it("hydrates empty For fallbacks and swaps cleanly between fallback and keyed items", () => {
+    const source = `
+      export const a = { id: "a", label: "alpha" };
+      export const b = { id: "b", label: "beta" };
+      export const items = signal([]);
+
+      function Empty() {
+        onCleanup(() => recordCleanup("empty"));
+        return <span data-state="empty">empty</span>;
+      }
+
+      function Row(props) {
+        onCleanup(() => recordCleanup(props.item.id));
+        return <button data-id={props.item.id}>{props.item.label}</button>;
+      }
+
+      export function View() {
+        return (
+          <section>
+            <For each={items} fallback={<Empty />}>
+              {(item) => <Row item={item} />}
+            </For>
+          </section>
+        );
+      }
+    `;
+    const cleanups: string[] = [];
+    const domScope = { For, onCleanup, recordCleanup: (label: string) => cleanups.push(label), signal };
+    const ssrScope = { For, onCleanup: () => undefined, recordCleanup: () => undefined, signal };
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View", "items", "a", "b"],
+      createTemplateInstance,
+      domScope,
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View"],
+      createSSRTemplate,
+      ssrScope,
+    );
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const items = domModule.items as Signal<Array<{ id: string; label: string }>>;
+    const a = domModule.a as { id: string; label: string };
+    const b = domModule.b as { id: string; label: string };
+    const container = document.createElement("div");
+    const html = renderToString(() => ssrView(), { hydrate: true });
+
+    expect(html).toContain('data-state="empty"');
+    expect(html).not.toContain("function");
+
+    container.innerHTML = html;
+
+    const dispose = hydrate(() => domView() as never, container);
+
+    try {
+      expect(container.querySelector('[data-state="empty"]')?.textContent).toBe("empty");
+
+      items.set([a, b]);
+
+      expect(cleanups).toEqual(["empty"]);
+      expect(Array.from(container.querySelectorAll("button")).map((button) => button.textContent)).toEqual([
+        "alpha",
+        "beta",
+      ]);
+
+      items.set([]);
+
+      expect(cleanups).toEqual(["empty", "a", "b"]);
+      expect(container.querySelector('[data-state="empty"]')?.textContent).toBe("empty");
+    } finally {
+      dispose();
+    }
+  });
 });
