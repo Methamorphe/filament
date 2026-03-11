@@ -885,9 +885,18 @@ describe("compiler DOM/SSR parity", () => {
     const container = document.createElement("div");
 
     container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
+    let message = "";
 
-    expect(() => hydrate(() => domView() as never, container)).toThrow(
-      /Hydration left the server (node ref|insert marker)/,
-    );
+    try {
+      hydrate(() => domView() as never, container);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain("Hydration left the server");
+    expect(message).toContain("Hydration container:");
+    expect(message).toContain("parent=<div>");
+    expect(message).toContain("<section>");
+    expect(message).toContain('data-state="panel"');
   });
 });

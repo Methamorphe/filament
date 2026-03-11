@@ -1,7 +1,7 @@
 import { createOwner, disposeOwner, runWithOwner, type Owner } from "../reactivity/owner.js";
 import { batch, effect, onCleanup, signal, type Signal } from "../reactivity/signal.js";
 import { createControlFlowId, createSSRMarker, getControlFlowMode } from "./control-flow-context.js";
-import { getHydrationBoundary, withHydrationBoundary } from "./hydration.js";
+import { createHydrationError, getHydrationBoundary, withHydrationBoundary } from "./hydration.js";
 import { mountValueBeforeAnchor } from "./render.js";
 import type { Child, ForProps, LazyChild, MaybeAccessor, ShowProps } from "./types.js";
 
@@ -38,7 +38,7 @@ function claimHydratedRange(startData: string, endData: string): Range {
   const boundary = getHydrationBoundary();
 
   if (boundary === null) {
-    throw new Error("Hydrated control flow requires an active hydration boundary.");
+    throw createHydrationError("Hydrated control flow requires an active hydration boundary.", { boundary });
   }
 
   let start: Comment | null = null;
@@ -51,7 +51,7 @@ function claimHydratedRange(startData: string, endData: string): Range {
   }
 
   if (start === null) {
-    throw new Error(`Missing hydrated control-flow start marker "${startData}".`);
+    throw createHydrationError(`Missing hydrated control-flow start marker "${startData}".`, { boundary });
   }
 
   let end: Comment | null = null;
@@ -64,7 +64,7 @@ function claimHydratedRange(startData: string, endData: string): Range {
   }
 
   if (end === null) {
-    throw new Error(`Missing hydrated control-flow end marker "${endData}".`);
+    throw createHydrationError(`Missing hydrated control-flow end marker "${endData}".`, { boundary });
   }
 
   boundary.cursor = end.nextSibling;
@@ -149,7 +149,9 @@ function hydrateRangeContent(
   const parent = end.parentNode;
 
   if (parent === null) {
-    throw new Error("Hydrated control-flow range is missing its parent node.");
+    throw createHydrationError("Hydrated control-flow range is missing its parent node.", {
+      boundary: getHydrationBoundary(),
+    });
   }
 
   const owner = createOwner(parentOwner);
@@ -432,7 +434,9 @@ export function For<T>(props: ForProps<T>): Child {
           const parent = range.end.parentNode;
 
           if (parent === null) {
-            throw new Error("Hydrated For fallback range is missing its parent node.");
+            throw createHydrationError("Hydrated For fallback range is missing its parent node.", {
+              boundary: getHydrationBoundary(),
+            });
           }
 
           fallbackRange = withHydrationBoundary(parent, range.start.nextSibling, range.end, () =>
@@ -471,7 +475,9 @@ export function For<T>(props: ForProps<T>): Child {
       const parent = range.end.parentNode;
 
       if (parent === null) {
-        throw new Error("Hydrated For range is missing its parent node.");
+        throw createHydrationError("Hydrated For range is missing its parent node.", {
+          boundary: getHydrationBoundary(),
+        });
       }
 
       currentEntries = withHydrationBoundary(parent, range.start.nextSibling, range.end, () =>

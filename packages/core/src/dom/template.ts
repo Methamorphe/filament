@@ -1,5 +1,6 @@
 import { effect, onCleanup } from "../reactivity/signal.js";
 import {
+  createHydrationError,
   getHydrationBoundary,
   withHydrationBoundary,
 } from "./hydration.js";
@@ -100,7 +101,7 @@ function claimHydrationRoot(ir: DOMTemplateIR): Element {
   const boundary = getHydrationBoundary();
 
   if (boundary === null) {
-    throw new Error("Hydration requested without an active boundary.");
+    throw createHydrationError("Hydration requested without an active boundary.", { boundary });
   }
 
   const rootRef = ir.nodeRefs[0];
@@ -128,12 +129,14 @@ function claimHydrationRoot(ir: DOMTemplateIR): Element {
     return element;
   }
 
-  throw new Error(`Missing hydrated root ref "${rootRef}" in DOM.`);
+  throw createHydrationError(`Missing hydrated root ref "${rootRef}" in DOM.`, { boundary });
 }
 
 function collectHydratedInsertNodes(start: Comment, anchor: Comment): Node[] {
   if (start.parentNode !== anchor.parentNode || start.parentNode === null) {
-    throw new Error("Hydration markers must share the same parent node.");
+    throw createHydrationError("Hydration markers must share the same parent node.", {
+      container: anchor.parentNode ?? start.parentNode,
+    });
   }
 
   const nodes: Node[] = [];
@@ -154,7 +157,9 @@ function mountInsertBinding(anchor: Comment, evaluate: () => unknown, start?: Co
       const parent = anchor.parentNode;
 
       if (parent === null) {
-        throw new Error("Hydrated insert anchor is missing its parent node.");
+        throw createHydrationError("Hydrated insert anchor is missing its parent node.", {
+          boundary: getHydrationBoundary(),
+        });
       }
 
       withHydrationBoundary(parent, start?.nextSibling ?? anchor, anchor, () => {
