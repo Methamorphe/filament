@@ -834,6 +834,7 @@ describe("compiler DOM/SSR parity", () => {
     const html = renderToString(() => ssrView(), { hydrate: true });
 
     expect(html).toContain("filament-start:");
+    expect(html).not.toContain("data-f-node=");
     expect(html).not.toContain('data-state="panel"');
 
     container.innerHTML = html;
@@ -893,10 +894,10 @@ describe("compiler DOM/SSR parity", () => {
       message = error instanceof Error ? error.message : String(error);
     }
 
-    expect(message).toContain("Hydration left the server");
-    expect(message).toContain("Hydration container:");
-    expect(message).toContain("parent=<div>");
-    expect(message).toContain("<section>");
+    expect(message).toContain("Hydration boundary left unclaimed DOM nodes");
+    expect(message).toContain("Hydration boundary:");
+    expect(message).toContain("parent=<section>");
+    expect(message).toContain("filament-anchor:");
     expect(message).toContain('data-state="panel"');
   });
 });

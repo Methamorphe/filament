@@ -330,6 +330,7 @@ Contract rules:
 Hydration metadata v0 reuses this same contract instead of introducing a second compiler shape:
 
 - hydratable SSR keeps `data-f-node="<ref>"` attributes for `nodeRefs`
+- root refs that exist only to let the client claim the template root can be omitted from SSR output; the client then claims that root structurally
 - hydratable SSR emits `<!--filament-start:<ref>-->...<!--filament-anchor:<ref>-->` around dynamic inserts
 - `hydrate()` walks those markers, claims the existing DOM, restores effects and events, and does not rerender the subtree
 - if any `data-f-node` or `filament-start:` marker remains after hydration, the runtime fails clearly with boundary or container preview context because SSR and client structure diverged

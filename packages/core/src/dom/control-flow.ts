@@ -158,7 +158,7 @@ function hydrateRangeContent(
 
   runWithOwner(owner, () => {
     withHydrationBoundary(parent, start.nextSibling, end, () => {
-      void render();
+      return render();
     });
   });
 

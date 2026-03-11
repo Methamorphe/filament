@@ -198,6 +198,7 @@ Client runtime primitives:
 
 Hydration currently expects structural parity with hydratable SSR output.
 If server markers remain unclaimed after `hydrate()`, Filament throws instead of leaving a partially restored subtree in place, and the error includes boundary or container preview context to show where claim failed.
+Hydratable SSR also trims metadata where possible: roots that only need structural claim do not keep a `data-f-node` marker in the HTML payload.
 
 ### `@filament/vite-plugin`
 

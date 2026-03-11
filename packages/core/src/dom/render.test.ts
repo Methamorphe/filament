@@ -28,10 +28,73 @@ describe("setAttributeOrProperty", () => {
 });
 
 describe("hydrate diagnostics", () => {
+  it("claims unbound single-root templates without server node markers", () => {
+    const container = document.createElement("div");
+
+    container.innerHTML = "<button>ready</button>";
+
+    const dispose = hydrate(
+      () =>
+        createTemplateInstance(
+          {
+            html: '<button data-f-node="t0-n0">ready</button>',
+            nodeRefs: ["t0-n0"],
+            anchorRefs: [],
+          },
+          [],
+        ),
+      container,
+    );
+
+    try {
+      expect(container.innerHTML).toBe("<button>ready</button>");
+    } finally {
+      dispose();
+    }
+  });
+
   it("includes boundary context when the expected hydrated root is missing", () => {
     const container = document.createElement("div");
 
     container.innerHTML = '<span data-f-node="other">idle</span>';
+
+    let message = "";
+
+    try {
+      hydrate(
+        () =>
+          createTemplateInstance(
+            {
+              html: '<button data-f-node="t0-n0">ready</button>',
+              nodeRefs: ["t0-n0"],
+              anchorRefs: [],
+            },
+            [
+              {
+                kind: "attribute",
+                ref: "t0-n0",
+                name: "className",
+                evaluate: () => "hot",
+              },
+            ],
+          ),
+        container,
+      );
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('Missing hydrated root ref "t0-n0" in DOM.');
+    expect(message).toContain("Hydration boundary:");
+    expect(message).toContain("parent=<div>");
+    expect(message).toContain('cursor=<span data-f-node="other">');
+    expect(message).toContain('remaining=<span data-f-node="other">');
+  });
+
+  it("includes the expected root preview when an unbound root cannot be claimed structurally", () => {
+    const container = document.createElement("div");
+
+    container.innerHTML = "<span>ready</span>";
 
     let message = "";
 
@@ -52,11 +115,9 @@ describe("hydrate diagnostics", () => {
       message = error instanceof Error ? error.message : String(error);
     }
 
-    expect(message).toContain('Missing hydrated root ref "t0-n0" in DOM.');
+    expect(message).toContain('Missing hydrated root element <button> in DOM.');
     expect(message).toContain("Hydration boundary:");
-    expect(message).toContain("parent=<div>");
-    expect(message).toContain('cursor=<span data-f-node="other">');
-    expect(message).toContain('remaining=<span data-f-node="other">');
+    expect(message).toContain('remaining=<span>');
   });
 });
 

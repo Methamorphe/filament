@@ -159,10 +159,26 @@ function getTemplatePlan(html: string): TemplatePlanPart[] {
   return parts;
 }
 
+function collectBoundNodeRefs(bindings: readonly SSRBinding[]): Set<string> {
+  const refs = new Set<string>();
+
+  for (const binding of bindings) {
+    if (binding.kind === "insert") {
+      continue;
+    }
+
+    refs.add(binding.ref);
+  }
+
+  return refs;
+}
+
 export function createSSRTemplate(ir: SSRTemplateIR, bindings: SSRBinding[]): SSRChunk {
   const inserts = new Map<string, string>();
   const dynamicAttributes = new Map<string, string[]>();
   const shouldHydrate = currentRenderContext.hydrate;
+  const boundNodeRefs = collectBoundNodeRefs(bindings);
+  const rootRef = ir.nodeRefs[0] ?? null;
 
   for (const binding of bindings) {
     if (binding.kind === "insert") {
@@ -209,7 +225,9 @@ export function createSSRTemplate(ir: SSRTemplateIR, bindings: SSRBinding[]): SS
     }
 
     const attributes = dynamicAttributes.get(part.ref) ?? [];
-    const hydrationMarker = shouldHydrate ? `${ELEMENT_REF_ATTRIBUTE}="${part.ref}"` : "";
+    const shouldEmitNodeMarker =
+      shouldHydrate && (part.ref !== rootRef || boundNodeRefs.has(part.ref));
+    const hydrationMarker = shouldEmitNodeMarker ? `${ELEMENT_REF_ATTRIBUTE}="${part.ref}"` : "";
 
     if (attributes.length > 0 || hydrationMarker !== "") {
       html += ` ${[hydrationMarker, ...attributes].filter(Boolean).join(" ")}`;

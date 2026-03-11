@@ -32,10 +32,21 @@ export function withHydrationBoundary<T>(
   end: ChildNode | null,
   fn: () => T,
 ): T {
-  hydrationBoundaries.push({ parent, cursor, end });
+  const boundary: HydrationBoundary = { parent, cursor, end };
+  hydrationBoundaries.push(boundary);
 
   try {
-    return fn();
+    const result = fn();
+    claimHydratedValue(boundary, result);
+
+    if (boundary.end !== null && boundary.cursor !== boundary.end) {
+      throw createHydrationError(
+        "Hydration boundary left unclaimed DOM nodes before its end marker. SSR and client structure are out of sync.",
+        { boundary },
+      );
+    }
+
+    return result;
   } finally {
     hydrationBoundaries.pop();
   }
@@ -135,6 +146,51 @@ function describeContainerPreview(container: ParentNode): string {
   }
 
   return `parent=${formatParentPreview(container)}; remaining=${preview.length === 0 ? "<empty>" : preview.join(", ")}`;
+}
+
+function claimHydratedValue(boundary: HydrationBoundary, value: unknown): void {
+  if (value === null || value === undefined || value === false || value === true) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      claimHydratedValue(boundary, item);
+    }
+
+    return;
+  }
+
+  if (value instanceof Node) {
+    return;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "bigint") {
+    const current = boundary.cursor;
+    const expected = String(value);
+
+    if (current === null || current === boundary.end) {
+      throw createHydrationError(`Expected hydrated text node "${truncatePreview(expected)}" but found none.`, {
+        boundary,
+      });
+    }
+
+    if (current.nodeType !== Node.TEXT_NODE) {
+      throw createHydrationError(
+        `Expected hydrated text node "${truncatePreview(expected)}" but found ${formatHydrationNode(current)}.`,
+        { boundary },
+      );
+    }
+
+    if ((current.textContent ?? "") !== expected) {
+      throw createHydrationError(
+        `Expected hydrated text node "${truncatePreview(expected)}" but found "${truncatePreview(current.textContent ?? "")}".`,
+        { boundary },
+      );
+    }
+
+    boundary.cursor = current.nextSibling;
+  }
 }
 
 export function createHydrationError(

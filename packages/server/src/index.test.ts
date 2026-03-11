@@ -119,4 +119,27 @@ describe("createSSRTemplate", () => {
       '<button data-f-node="n0"><!--filament-start:a0-->Count 1<!--filament-anchor:a0--></button>',
     );
   });
+
+  it("omits root markers when the root ref is only used for hydration claim", () => {
+    const result = renderToString(
+      () =>
+        createSSRTemplate(
+          {
+            html: '<section data-f-node="n0"><!--filament-anchor:a0--></section>',
+            nodeRefs: ["n0"],
+            anchorRefs: ["a0"],
+          },
+          [
+            {
+              kind: "insert",
+              ref: "a0",
+              evaluate: () => "Count 1",
+            },
+          ],
+        ),
+      { hydrate: true },
+    );
+
+    expect(result).toBe('<section><!--filament-start:a0-->Count 1<!--filament-anchor:a0--></section>');
+  });
 });

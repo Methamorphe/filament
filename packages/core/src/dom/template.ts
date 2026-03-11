@@ -43,6 +43,68 @@ function cloneTemplate(html: string): DocumentFragment {
   return getTemplate(html).content.cloneNode(true) as DocumentFragment;
 }
 
+function collectBoundNodeRefs(bindings: readonly DOMBinding[]): Set<string> {
+  const refs = new Set<string>();
+
+  for (const binding of bindings) {
+    if (binding.kind === "insert") {
+      continue;
+    }
+
+    refs.add(binding.ref);
+  }
+
+  return refs;
+}
+
+function getExpectedRootElement(html: string): Element | null {
+  return getTemplate(html).content.firstElementChild;
+}
+
+function matchesStructuralRoot(expected: Element, candidate: Element): boolean {
+  if (expected.tagName !== candidate.tagName) {
+    return false;
+  }
+
+  const expectedAttributes = Array.from(expected.attributes)
+    .filter((attribute) => attribute.name !== elementRefAttribute)
+    .map((attribute) => [attribute.name, attribute.value] as const)
+    .sort(([left], [right]) => left.localeCompare(right));
+  const candidateAttributes = Array.from(candidate.attributes)
+    .filter((attribute) => attribute.name !== elementRefAttribute)
+    .map((attribute) => [attribute.name, attribute.value] as const)
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  if (expectedAttributes.length !== candidateAttributes.length) {
+    return false;
+  }
+
+  for (let index = 0; index < expectedAttributes.length; index += 1) {
+    const expectedAttribute = expectedAttributes[index]!;
+    const candidateAttribute = candidateAttributes[index]!;
+
+    if (
+      expectedAttribute[0] !== candidateAttribute[0] ||
+      expectedAttribute[1] !== candidateAttribute[1]
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function formatExpectedRootPreview(expected: Element): string {
+  const attributes = Array.from(expected.attributes)
+    .filter((attribute) => attribute.name !== elementRefAttribute)
+    .slice(0, 3)
+    .map((attribute) => `${attribute.name}="${attribute.value}"`);
+
+  return attributes.length === 0
+    ? `<${expected.tagName.toLowerCase()}>`
+    : `<${expected.tagName.toLowerCase()} ${attributes.join(" ")}>`;
+}
+
 function inspectRefNode(
   current: Node,
   pendingNodeRefs: Set<string>,
@@ -127,7 +189,7 @@ function resolveRefs(root: DocumentFragment | Element, ir: DOMTemplateIR): Resol
   return { nodes, anchors, starts };
 }
 
-function claimHydrationRoot(ir: DOMTemplateIR): Element {
+function claimHydrationRoot(ir: DOMTemplateIR, boundNodeRefs: ReadonlySet<string>): Element {
   const boundary = getHydrationBoundary();
 
   if (boundary === null) {
@@ -140,6 +202,9 @@ function claimHydrationRoot(ir: DOMTemplateIR): Element {
     throw new Error("Hydration requires a stable root node ref on every template.");
   }
 
+  const expectedRoot = getExpectedRootElement(ir.html);
+  const rootNeedsMarker = boundNodeRefs.has(rootRef);
+
   for (
     let current = boundary.cursor;
     current !== boundary.end && current !== null;
@@ -151,7 +216,11 @@ function claimHydrationRoot(ir: DOMTemplateIR): Element {
 
     const element = current as Element;
 
-    if (element.getAttribute(elementRefAttribute) !== rootRef) {
+    if (rootNeedsMarker) {
+      if (element.getAttribute(elementRefAttribute) !== rootRef) {
+        continue;
+      }
+    } else if (expectedRoot !== null && !matchesStructuralRoot(expectedRoot, element)) {
       continue;
     }
 
@@ -159,7 +228,14 @@ function claimHydrationRoot(ir: DOMTemplateIR): Element {
     return element;
   }
 
-  throw createHydrationError(`Missing hydrated root ref "${rootRef}" in DOM.`, { boundary });
+  if (rootNeedsMarker) {
+    throw createHydrationError(`Missing hydrated root ref "${rootRef}" in DOM.`, { boundary });
+  }
+
+  throw createHydrationError(
+    `Missing hydrated root element ${expectedRoot === null ? `"${rootRef}"` : formatExpectedRootPreview(expectedRoot)} in DOM.`,
+    { boundary },
+  );
 }
 
 function collectHydratedInsertNodes(start: Comment, anchor: Comment): Node[] {
@@ -193,7 +269,7 @@ function mountInsertBinding(anchor: Comment, evaluate: () => unknown, start?: Co
       }
 
       withHydrationBoundary(parent, start?.nextSibling ?? anchor, anchor, () => {
-        void evaluate();
+        return evaluate();
       });
 
       start?.parentNode?.removeChild(start);
@@ -227,7 +303,8 @@ function mountEventBinding(
 
 export function createTemplateInstance(ir: DOMTemplateIR, bindings: DOMBinding[]): Node {
   const boundary = getHydrationBoundary();
-  const root = boundary === null ? cloneTemplate(ir.html) : claimHydrationRoot(ir);
+  const boundNodeRefs = collectBoundNodeRefs(bindings);
+  const root = boundary === null ? cloneTemplate(ir.html) : claimHydrationRoot(ir, boundNodeRefs);
   const refs = resolveRefs(root, ir);
 
   for (const binding of bindings) {
