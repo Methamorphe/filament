@@ -69,12 +69,12 @@ function inspectRefNode(
 
   const comment = current as Comment;
 
-    if (comment.data.startsWith(anchorPrefix)) {
-      const ref = comment.data.slice(anchorPrefix.length);
+  if (comment.data.startsWith(anchorPrefix)) {
+    const ref = comment.data.slice(anchorPrefix.length);
 
-      if (pendingAnchorRefs.has(ref) && !anchors.has(ref)) {
-        anchors.set(ref, comment);
-      }
+    if (pendingAnchorRefs.has(ref) && !anchors.has(ref)) {
+      anchors.set(ref, comment);
+    }
 
     return;
   }
