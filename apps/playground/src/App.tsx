@@ -7,8 +7,10 @@ import {
 } from "./benchmark/runner";
 import { buildScenarioMatrix, compareMedians } from "./benchmark/stats";
 import type { SampleSummary } from "./benchmark/types";
+import { createHydrationDemoController, type HydrationDemoController } from "./hydration-demo";
 
 type BenchmarkRunState = "idle" | "running" | "ready" | "error";
+type HydrationDemoState = "idle" | "rendering" | "snapshot" | "hydrating" | "live" | "error";
 
 function formatDuration(value: number): string {
   if (value >= 100) {
@@ -52,6 +54,10 @@ export function App() {
   const benchmarkError = signal<string | null>(null);
   const selectedSuiteId = signal(BENCHMARK_SUITES[0]?.id ?? "grid-core");
   const reportsBySuite = signal<Record<string, Awaited<ReturnType<typeof runBenchmarkSuite>>>>({});
+  const hydrationDemoState = signal<HydrationDemoState>("idle");
+  const hydrationDemoError = signal<string | null>(null);
+  const hydrationDemoHtml = signal("");
+  let hydrationDemoController: HydrationDemoController | null = null;
 
   const activeSuite = memo(() => getBenchmarkSuite(selectedSuiteId()));
   const benchmarkReport = memo(() => reportsBySuite()[selectedSuiteId()] ?? null);
@@ -107,6 +113,29 @@ export function App() {
 
     return `Last run at ${new Date(report.generatedAt).toLocaleTimeString()}. Median of ${report.suite.config.samples} samples.`;
   });
+  const hydrationDemoStatus = memo(() => {
+    if (hydrationDemoState() === "rendering") {
+      return "Rendering a hydratable SSR snapshot into the handoff sandbox.";
+    }
+
+    if (hydrationDemoState() === "hydrating") {
+      return "Restoring bindings and events onto the existing SSR DOM.";
+    }
+
+    if (hydrationDemoError() !== null) {
+      return hydrationDemoError();
+    }
+
+    if (hydrationDemoState() === "snapshot") {
+      return "Snapshot is inert HTML right now. Use the hydrate action to wake the same DOM up.";
+    }
+
+    if (hydrationDemoState() === "live") {
+      return "The same nodes are now interactive. Use the inner controls to mutate the hydrated subtree.";
+    }
+
+    return "No handoff yet. Render a hydratable SSR snapshot, then attach the client runtime in place.";
+  });
 
   effect(() => {
     document.title =
@@ -116,6 +145,73 @@ export function App() {
       document.title = "Filament Playground";
     });
   });
+
+  onCleanup(() => {
+    hydrationDemoController?.dispose();
+    hydrationDemoController = null;
+  });
+
+  function getHydrationDemoHost(): HTMLElement {
+    const host = document.getElementById("hydration-demo-host");
+
+    if (!(host instanceof HTMLElement)) {
+      throw new Error("Missing hydration demo host.");
+    }
+
+    return host;
+  }
+
+  async function renderHydrationDemo() {
+    if (hydrationDemoState() === "rendering" || hydrationDemoState() === "hydrating") {
+      return;
+    }
+
+    hydrationDemoController?.dispose();
+    hydrationDemoController = null;
+    hydrationDemoState.set("rendering");
+    hydrationDemoError.set(null);
+
+    try {
+      const controller = await createHydrationDemoController(getHydrationDemoHost());
+
+      hydrationDemoController = controller;
+      batch(() => {
+        hydrationDemoHtml.set(controller.html);
+        hydrationDemoState.set("snapshot");
+      });
+    } catch (error) {
+      hydrationDemoState.set("error");
+      hydrationDemoError.set(error instanceof Error ? error.message : "Hydration demo failed.");
+    }
+  }
+
+  function hydrateHydrationDemo() {
+    if (hydrationDemoController === null || hydrationDemoState() !== "snapshot") {
+      return;
+    }
+
+    hydrationDemoState.set("hydrating");
+    hydrationDemoError.set(null);
+
+    try {
+      hydrationDemoController.hydrate();
+      hydrationDemoState.set("live");
+    } catch (error) {
+      hydrationDemoState.set("error");
+      hydrationDemoError.set(error instanceof Error ? error.message : "Hydration failed.");
+    }
+  }
+
+  function resetHydrationDemo() {
+    hydrationDemoController?.dispose();
+    hydrationDemoController = null;
+
+    batch(() => {
+      hydrationDemoState.set("idle");
+      hydrationDemoError.set(null);
+      hydrationDemoHtml.set("");
+    });
+  }
 
   async function runBenchmarks() {
     if (benchmarkRunState() === "running") {
@@ -166,6 +262,7 @@ export function App() {
             <span className="badge">Fine-grained updates</span>
             <span className="badge">Nested component fan-out</span>
             <span className="badge">SSR string render cost</span>
+            <span className="badge">Hydration handoff demo</span>
             <span className="badge">Async staged commits</span>
             <span className="badge">SVG graphs and animation ticks</span>
           </div>
@@ -304,6 +401,86 @@ export function App() {
             <code> pnpm --filter playground preview</code>.
           </p>
         </section>
+      </section>
+
+      <section className="panel handoff-panel">
+        <div className="results-head">
+          <div>
+            <h2>SSR Handoff</h2>
+            <p className="section-copy">
+              This panel makes the hydration path explicit: first emit HTML markers, then attach
+              the client runtime onto the exact same DOM subtree.
+            </p>
+          </div>
+        </div>
+
+        <div className="handoff-grid-shell">
+          <div className="handoff-stage">
+            <div className="config-grid handoff-facts">
+              <div className="config-card">
+                <span className="config-label">Phase</span>
+                <strong className="config-value">{hydrationDemoState()}</strong>
+              </div>
+              <div className="config-card">
+                <span className="config-label">Snapshot bytes</span>
+                <strong className="config-value">{hydrationDemoHtml().length || 0}</strong>
+              </div>
+            </div>
+
+            <div className="actions">
+              <button
+                type="button"
+                disabled={
+                  hydrationDemoState() === "rendering" || hydrationDemoState() === "hydrating"
+                }
+                onClick={renderHydrationDemo}
+              >
+                {hydrationDemoState() === "rendering"
+                  ? "Rendering snapshot..."
+                  : "Render SSR snapshot"}
+              </button>
+              <button
+                type="button"
+                disabled={hydrationDemoState() !== "snapshot"}
+                onClick={hydrateHydrationDemo}
+              >
+                {hydrationDemoState() === "hydrating" ? "Hydrating..." : "Hydrate same DOM"}
+              </button>
+              <button
+                type="button"
+                disabled={hydrationDemoState() === "idle"}
+                onClick={resetHydrationDemo}
+              >
+                Reset handoff
+              </button>
+            </div>
+
+            {hydrationDemoError() !== null ? (
+              <p className="error-banner">{hydrationDemoError()}</p>
+            ) : null}
+
+            <p className="status-line">{hydrationDemoStatus()}</p>
+
+            <div className={hydrationDemoState() === "idle" ? "handoff-host is-empty" : "handoff-host"}>
+              {hydrationDemoState() === "idle" ? (
+                <p className="empty-state">
+                  The subtree is empty until you render the hydratable SSR snapshot.
+                </p>
+              ) : null}
+              <div id="hydration-demo-host" />
+            </div>
+          </div>
+
+          <aside className="handoff-inspector">
+            <div className="handoff-inspector-head">
+              <span className="handoff-kicker">Hydratable HTML</span>
+              <strong>Markers stay in the snapshot until `hydrate()` claims them.</strong>
+            </div>
+            <pre className="handoff-code">
+              <code>{hydrationDemoHtml() || "<!-- snapshot will appear here -->"}</code>
+            </pre>
+          </aside>
+        </div>
       </section>
 
       <section className="panel results-panel">

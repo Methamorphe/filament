@@ -124,15 +124,15 @@ describe("transformFilamentModule", () => {
     expect(module.captures).toHaveLength(1);
     expect(value.helper).toBe("dom");
     expect(module.captures[0]?.ir).toEqual({
-      html: '<button data-f-node="n0" class="primary"><strong>Hot</strong><!--filament-anchor:a0--></button>',
-      nodeRefs: ["n0"],
-      anchorRefs: ["a0"],
+      html: '<button data-f-node="t0-n0" class="primary"><strong>Hot</strong><!--filament-anchor:t0-a0--></button>',
+      nodeRefs: ["t0-n0"],
+      anchorRefs: ["t0-a0"],
     });
     expect(summarizeBindings(module.captures[0]?.bindings ?? [])).toEqual([
-      { kind: "attribute", ref: "n0", name: "data-title", value: "<unsafe>" },
-      { kind: "attribute", ref: "n0", name: "disabled", value: true },
-      { kind: "event", ref: "n0", name: "click", value: "clicked" },
-      { kind: "insert", ref: "a0", value: "Hello" },
+      { kind: "attribute", ref: "t0-n0", name: "data-title", value: "<unsafe>" },
+      { kind: "attribute", ref: "t0-n0", name: "disabled", value: true },
+      { kind: "event", ref: "t0-n0", name: "click", value: "clicked" },
+      { kind: "insert", ref: "t0-a0", value: "Hello" },
     ]);
   });
 
@@ -191,8 +191,8 @@ describe("transformFilamentModule", () => {
     });
     expect(module.captures).toHaveLength(1);
     expect(module.captures[0]?.ir).toEqual({
-      html: '<span data-f-node="n0">Hi</span>',
-      nodeRefs: ["n0"],
+      html: '<span data-f-node="t0-n0">Hi</span>',
+      nodeRefs: ["t0-n0"],
       anchorRefs: [],
     });
     expect(Array.isArray(value.children)).toBe(true);
@@ -200,8 +200,8 @@ describe("transformFilamentModule", () => {
     expect(value.children[0]).toMatchObject({
       helper: "dom",
       ir: {
-        html: '<span data-f-node="n0">Hi</span>',
-        nodeRefs: ["n0"],
+        html: '<span data-f-node="t0-n0">Hi</span>',
+        nodeRefs: ["t0-n0"],
         anchorRefs: [],
       },
     });

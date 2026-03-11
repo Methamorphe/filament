@@ -24,6 +24,7 @@ const VOID_ELEMENTS = new Set([
 ]);
 
 interface TemplateContext {
+  templateId: number;
   nodeRefs: string[];
   anchorRefs: string[];
   bindings: t.ObjectExpression[];
@@ -34,6 +35,7 @@ interface TemplateContext {
 interface PluginState {
   options: TransformOptions;
   helperId?: t.Identifier;
+  nextTemplateId?: number;
   programPath?: NodePath<t.Program>;
 }
 
@@ -74,6 +76,7 @@ function createFilamentPlugin(options: TransformOptions): PluginObj<PluginState>
       Program(path: NodePath<t.Program>, state: PluginState) {
         state.options = options;
         state.programPath = path;
+        state.nextTemplateId = 0;
       },
       JSXElement(path: NodePath<t.JSXElement>, state: PluginState) {
         if (path.findParent((parent: NodePath) => parent.isJSXElement() || parent.isJSXFragment())) {
@@ -124,6 +127,7 @@ function compileFragmentExpression(node: t.JSXFragment, state: PluginState): t.E
 
 function compileNativeElement(node: t.JSXElement, state: PluginState): t.Expression {
   const ctx: TemplateContext = {
+    templateId: createTemplateId(state),
     nodeRefs: [],
     anchorRefs: [],
     bindings: [],
@@ -419,15 +423,21 @@ function propKey(name: string): t.Identifier | t.StringLiteral {
 }
 
 function createNodeRef(ctx: TemplateContext): string {
-  const ref = `n${ctx.nextNodeRef++}`;
+  const ref = `t${ctx.templateId}-n${ctx.nextNodeRef++}`;
   ctx.nodeRefs.push(ref);
   return ref;
 }
 
 function createAnchorRef(ctx: TemplateContext): string {
-  const ref = `a${ctx.nextAnchorRef++}`;
+  const ref = `t${ctx.templateId}-a${ctx.nextAnchorRef++}`;
   ctx.anchorRefs.push(ref);
   return ref;
+}
+
+function createTemplateId(state: PluginState): number {
+  const templateId = state.nextTemplateId ?? 0;
+  state.nextTemplateId = templateId + 1;
+  return templateId;
 }
 
 function isNativeElement(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): boolean {

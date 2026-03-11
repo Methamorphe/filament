@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { createTemplateInstance } from "@filament/core/internal";
-import { hydrate, render, signal } from "@filament/core";
+import { hydrate, render, signal, type Signal } from "@filament/core";
 import { createSSRTemplate, renderToString } from "@filament/server";
 import { transformFilamentModule } from "../../../packages/vite-plugin/src/compiler/transform";
 import type { TransformOptions } from "../../../packages/vite-plugin/src/compiler/ir";
@@ -245,8 +245,8 @@ describe("compiler DOM/SSR parity", () => {
 
     container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
 
-    expect(container.innerHTML).toContain('data-f-node="n0"');
-    expect(container.innerHTML).toContain("filament-start:a0");
+    expect(container.innerHTML).toContain('data-f-node="t0-n0"');
+    expect(container.innerHTML).toContain("filament-start:t0-a0");
 
     const button = container.firstElementChild as HTMLButtonElement | null;
 
@@ -259,8 +259,8 @@ describe("compiler DOM/SSR parity", () => {
       const hydratedButton = container.firstElementChild as HTMLButtonElement | null;
 
       expect(hydratedButton?.getAttribute("data-f-node")).toBe(null);
-      expect(container.innerHTML).not.toContain("filament-start:a0");
-      expect(container.innerHTML).toContain("filament-anchor:a0");
+      expect(container.innerHTML).not.toContain("filament-start:t0-a0");
+      expect(container.innerHTML).toContain("filament-anchor:t0-a0");
 
       hydratedButton?.dispatchEvent(new Event("click"));
 
@@ -271,5 +271,136 @@ describe("compiler DOM/SSR parity", () => {
     }
 
     expect(container.innerHTML).toBe("");
+  });
+
+  it("hydrates nested mapped inserts and keeps subsequent updates live", () => {
+    const source = `
+      export const emphasis = signal("cool");
+      export const rows = signal([
+        { id: "alpha", label: "Alpha", active: false },
+        { id: "beta", label: "Beta", active: true }
+      ]);
+
+      export function View() {
+        return (
+          <section className={emphasis()}>
+            {rows().map((row) => (
+              <article data-row={row.id}>
+                <strong>{row.label}</strong>
+                {row.active ? (
+                  <>
+                    <span>ready</span>
+                    <em>now</em>
+                  </>
+                ) : (
+                  <span>queued</span>
+                )}
+              </article>
+            ))}
+          </section>
+        );
+      }
+    `;
+    const scope = { signal };
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View", "rows", "emphasis"],
+      createTemplateInstance,
+      scope,
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View", "rows", "emphasis"],
+      createSSRTemplate,
+      scope,
+    );
+    const container = document.createElement("div");
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const rows = domModule.rows as Signal<
+      Array<{ id: string; label: string; active: boolean }>
+    >;
+    const emphasis = domModule.emphasis as Signal<string>;
+
+    container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
+
+    const dispose = hydrate(() => domView() as never, container);
+
+    try {
+      expect(container.querySelectorAll("article")).toHaveLength(2);
+      expect(container.firstElementChild?.className).toBe("cool");
+      expect(container.textContent).toContain("Betareadynow");
+
+      rows.set([
+        { id: "alpha", label: "Alpha", active: true },
+        { id: "beta", label: "Beta", active: false },
+        { id: "gamma", label: "Gamma", active: true },
+      ]);
+      emphasis.set("warm");
+
+      expect(container.querySelectorAll("article")).toHaveLength(3);
+      expect(container.firstElementChild?.className).toBe("warm");
+      expect(container.textContent).toContain("Alphareadynow");
+      expect(container.textContent).toContain("Betaqueued");
+      expect(container.textContent).toContain("Gammareadynow");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("hydrates multi-node fragment roots when each child has a stable template root", () => {
+    const source = `
+      export const lead = signal("Lead");
+      export const status = signal("Ready");
+
+      export function View() {
+        return (
+          <>
+            <section data-kind="lead">{lead()}</section>
+            <aside data-kind="status">{status()}</aside>
+          </>
+        );
+      }
+    `;
+    const scope = { signal };
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View", "lead", "status"],
+      createTemplateInstance,
+      scope,
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View", "lead", "status"],
+      createSSRTemplate,
+      scope,
+    );
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const lead = domModule.lead as Signal<string>;
+    const status = domModule.status as Signal<string>;
+    const container = document.createElement("div");
+
+    container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
+
+    const dispose = hydrate(() => domView() as never, container);
+
+    try {
+      expect(container.children).toHaveLength(2);
+      expect(container.querySelector('[data-kind="lead"]')?.textContent).toBe("Lead");
+      expect(container.querySelector('[data-kind="status"]')?.textContent).toBe("Ready");
+
+      lead.set("Core");
+      status.set("Live");
+
+      expect(container.querySelector('[data-kind="lead"]')?.textContent).toBe("Core");
+      expect(container.querySelector('[data-kind="status"]')?.textContent).toBe("Live");
+    } finally {
+      dispose();
+    }
   });
 });

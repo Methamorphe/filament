@@ -370,6 +370,74 @@ button[disabled] {
     var(--paper);
 }
 
+.handoff-panel {
+  overflow: hidden;
+  padding-bottom: 1.5rem;
+}
+
+.handoff-grid-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.85fr);
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem 0;
+}
+
+.handoff-facts {
+  margin-top: 0;
+}
+
+.handoff-stage {
+  min-width: 0;
+}
+
+.handoff-host {
+  margin-top: 1rem;
+  min-height: 22rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(30, 26, 22, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 244, 236, 0.88)),
+    rgba(255, 255, 255, 0.88);
+  padding: 1rem;
+}
+
+.handoff-host.is-empty {
+  display: grid;
+  place-items: center;
+}
+
+.handoff-inspector {
+  min-width: 0;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(30, 26, 22, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 247, 233, 0.9), rgba(255, 255, 255, 0.92)),
+    rgba(255, 255, 255, 0.92);
+  padding: 1rem;
+}
+
+.handoff-inspector-head strong {
+  display: block;
+  margin-top: 0.35rem;
+  color: #55493e;
+}
+
+.handoff-code {
+  margin: 0.9rem 0 0;
+  padding: 0.95rem;
+  min-height: 19rem;
+  max-height: 28rem;
+  overflow: auto;
+  border-radius: 1rem;
+  border: 1px solid rgba(30, 26, 22, 0.08);
+  background: rgba(29, 26, 22, 0.96);
+  color: #fff8ef;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .results-head {
   padding: 1.5rem 1.5rem 0;
 }
@@ -636,6 +704,187 @@ button[disabled] {
   font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
 }
 
+.handoff-screen {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.handoff-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) auto;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.handoff-kicker {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #8b5e34;
+  font-size: 0.7rem;
+}
+
+.handoff-title {
+  margin: 0.3rem 0 0;
+  font-size: 1.25rem;
+  line-height: 1.1;
+}
+
+.handoff-copy {
+  margin-top: 0.55rem;
+  color: #6d5948;
+  line-height: 1.55;
+}
+
+.handoff-status {
+  border-radius: 1rem;
+  border: 1px solid rgba(30, 26, 22, 0.08);
+  background: rgba(255, 249, 241, 0.92);
+  padding: 0.8rem 0.9rem;
+  min-width: 9rem;
+}
+
+.handoff-status.is-live {
+  border-color: rgba(194, 124, 60, 0.26);
+  background:
+    linear-gradient(180deg, rgba(255, 243, 223, 0.96), rgba(255, 255, 255, 1)),
+    rgba(255, 255, 255, 0.92);
+}
+
+.handoff-status-label,
+.handoff-metric-label,
+.handoff-lane-index {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  color: #8b5e34;
+}
+
+.handoff-status strong {
+  display: block;
+  margin-top: 0.35rem;
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 1rem;
+}
+
+.handoff-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.handoff-metric {
+  border-radius: 1rem;
+  border: 1px solid rgba(30, 26, 22, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0.9rem;
+}
+
+.handoff-metric.is-warm {
+  border-color: rgba(194, 124, 60, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 243, 223, 0.95), rgba(255, 255, 255, 1)),
+    rgba(255, 255, 255, 0.92);
+}
+
+.handoff-metric-value {
+  display: block;
+  margin-top: 0.35rem;
+  font-family: "Iowan Old Style", "Book Antiqua", serif;
+  font-size: 1.8rem;
+}
+
+.handoff-stack {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.handoff-lane {
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  border-radius: 1rem;
+  border: 1px solid rgba(30, 26, 22, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 244, 236, 0.92)),
+    rgba(255, 255, 255, 0.92);
+  color: #1e1a16;
+  padding: 0.85rem 0.95rem;
+  box-shadow: none;
+}
+
+.handoff-lane:hover {
+  opacity: 1;
+}
+
+.handoff-lane.is-hot {
+  border-color: rgba(194, 124, 60, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 244, 226, 0.96), rgba(255, 255, 255, 1)),
+    rgba(255, 255, 255, 0.92);
+}
+
+.handoff-lane-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.handoff-lane-index {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 246, 233, 0.95);
+}
+
+.handoff-lane-owner {
+  display: block;
+  margin-top: 0.18rem;
+  color: #6d5948;
+  font-size: 0.83rem;
+}
+
+.handoff-lane-score {
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.92rem;
+}
+
+.handoff-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(30, 26, 22, 0.08);
+  background: rgba(248, 245, 239, 0.92);
+  padding: 0.28rem 0.6rem;
+  font-size: 0.74rem;
+}
+
+.handoff-chip.is-hot {
+  border-color: rgba(194, 124, 60, 0.24);
+  background: rgba(255, 241, 214, 0.96);
+}
+
+.handoff-foot {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.handoff-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  color: #6d5948;
+  font-size: 0.9rem;
+}
+
+.handoff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
 @media (max-width: 960px) {
   .hero,
   .lab-grid {
@@ -644,6 +893,11 @@ button[disabled] {
 
   .suite-selector {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .handoff-grid-shell,
+  .handoff-head {
+    grid-template-columns: 1fr;
   }
 
   .hero h1 {
@@ -666,6 +920,10 @@ button[disabled] {
   .metrics,
   .config-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .handoff-metrics {
+    grid-template-columns: 1fr;
   }
 
   .bench-kpi-grid,

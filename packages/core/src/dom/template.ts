@@ -46,7 +46,7 @@ function inspectRefNode(
     const element = current as Element;
     const ref = element.getAttribute(elementRefAttribute);
 
-    if (ref !== null && pendingNodeRefs.has(ref)) {
+    if (ref !== null && pendingNodeRefs.has(ref) && !nodes.has(ref)) {
       nodes.set(ref, element);
       element.removeAttribute(elementRefAttribute);
     }
@@ -60,12 +60,12 @@ function inspectRefNode(
 
   const comment = current as Comment;
 
-  if (comment.data.startsWith(anchorPrefix)) {
-    const ref = comment.data.slice(anchorPrefix.length);
+    if (comment.data.startsWith(anchorPrefix)) {
+      const ref = comment.data.slice(anchorPrefix.length);
 
-    if (pendingAnchorRefs.has(ref)) {
-      anchors.set(ref, comment);
-    }
+      if (pendingAnchorRefs.has(ref) && !anchors.has(ref)) {
+        anchors.set(ref, comment);
+      }
 
     return;
   }
@@ -73,7 +73,7 @@ function inspectRefNode(
   if (comment.data.startsWith(hydrationStartPrefix)) {
     const ref = comment.data.slice(hydrationStartPrefix.length);
 
-    if (pendingAnchorRefs.has(ref)) {
+    if (pendingAnchorRefs.has(ref) && !starts.has(ref)) {
       starts.set(ref, comment);
     }
   }
