@@ -196,6 +196,9 @@ Client runtime primitives:
 - `Show`
 - `For`
 
+Hydration currently expects structural parity with hydratable SSR output.
+If server markers remain unclaimed after `hydrate()`, Filament throws instead of leaving a partially restored subtree in place.
+
 ### `@filament/vite-plugin`
 
 Compiler integration for Vite:

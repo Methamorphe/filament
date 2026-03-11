@@ -1,6 +1,6 @@
 import { createRoot, onCleanup } from "../reactivity/signal.js";
 import { beginControlFlowMode, endControlFlowMode } from "./control-flow-context.js";
-import { beginHydration, endHydration } from "./hydration.js";
+import { assertHydrationComplete, beginHydration, endHydration } from "./hydration.js";
 import type { Child } from "./types.js";
 
 function isNode(value: unknown): value is Node {
@@ -117,20 +117,26 @@ export function render(factory: () => Child, container: Element): () => void {
 
 export function hydrate(factory: () => Child, container: Element): () => void {
   return createRoot((dispose) => {
-    beginHydration(container);
-    const previousControlFlowMode = beginControlFlowMode("hydrate");
-
     try {
-      void factory();
-    } finally {
-      endControlFlowMode(previousControlFlowMode);
-      endHydration();
+      beginHydration(container);
+      const previousControlFlowMode = beginControlFlowMode("hydrate");
+
+      try {
+        void factory();
+        assertHydrationComplete(container);
+      } finally {
+        endControlFlowMode(previousControlFlowMode);
+        endHydration();
+      }
+
+      onCleanup(() => {
+        container.replaceChildren();
+      });
+
+      return dispose;
+    } catch (error) {
+      dispose();
+      throw error;
     }
-
-    onCleanup(() => {
-      container.replaceChildren();
-    });
-
-    return dispose;
   });
 }

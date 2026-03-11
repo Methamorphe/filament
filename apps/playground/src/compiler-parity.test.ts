@@ -727,4 +727,167 @@ describe("compiler DOM/SSR parity", () => {
       dispose();
     }
   });
+
+  it("hydrates generic conditional inserts and disposes branch owners on switch", () => {
+    const source = `
+      export const mode = signal("live");
+
+      function Live() {
+        onCleanup(() => recordCleanup("live"));
+        return <button data-state="live">live</button>;
+      }
+
+      function Idle() {
+        onCleanup(() => recordCleanup("idle"));
+        return <span data-state="idle">idle</span>;
+      }
+
+      export function View() {
+        return (
+          <section>
+            {mode() === "live" ? <Live /> : <Idle />}
+          </section>
+        );
+      }
+    `;
+    const cleanups: string[] = [];
+    const domScope = { onCleanup, recordCleanup: (label: string) => cleanups.push(label), signal };
+    const ssrScope = { onCleanup: () => undefined, recordCleanup: () => undefined, signal };
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View", "mode"],
+      createTemplateInstance,
+      domScope,
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View"],
+      createSSRTemplate,
+      ssrScope,
+    );
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const mode = domModule.mode as Signal<string>;
+    const container = document.createElement("div");
+
+    container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
+
+    const dispose = hydrate(() => domView() as never, container);
+
+    try {
+      expect(container.querySelector('[data-state="live"]')?.textContent).toBe("live");
+
+      mode.set("idle");
+
+      expect(cleanups).toEqual(["live"]);
+      expect(container.querySelector('[data-state="idle"]')?.textContent).toBe("idle");
+
+      mode.set("live");
+
+      expect(cleanups).toEqual(["live", "idle"]);
+      expect(container.querySelector('[data-state="live"]')?.textContent).toBe("live");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("hydrates initially empty generic inserts and restores later subtrees", () => {
+    const source = `
+      export const ready = signal(false);
+
+      function Panel() {
+        onCleanup(() => recordCleanup("panel"));
+        return <button data-state="panel">ready</button>;
+      }
+
+      export function View() {
+        return (
+          <section>
+            {ready() ? <Panel /> : null}
+          </section>
+        );
+      }
+    `;
+    const cleanups: string[] = [];
+    const domScope = { onCleanup, recordCleanup: (label: string) => cleanups.push(label), signal };
+    const ssrScope = { onCleanup: () => undefined, recordCleanup: () => undefined, signal };
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View", "ready"],
+      createTemplateInstance,
+      domScope,
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View"],
+      createSSRTemplate,
+      ssrScope,
+    );
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const ready = domModule.ready as Signal<boolean>;
+    const container = document.createElement("div");
+    const html = renderToString(() => ssrView(), { hydrate: true });
+
+    expect(html).toContain("filament-start:");
+    expect(html).not.toContain('data-state="panel"');
+
+    container.innerHTML = html;
+
+    const dispose = hydrate(() => domView() as never, container);
+
+    try {
+      expect(container.querySelector('[data-state="panel"]')).toBeNull();
+
+      ready.set(true);
+
+      expect(container.querySelector('[data-state="panel"]')?.textContent).toBe("ready");
+
+      ready.set(false);
+
+      expect(cleanups).toEqual(["panel"]);
+      expect(container.querySelector('[data-state="panel"]')).toBeNull();
+    } finally {
+      dispose();
+    }
+  });
+
+  it("fails clearly when hydration leaves generic insert markers unclaimed", () => {
+    const source = `
+      export function View() {
+        return (
+          <section>
+            {initialReady ? <button data-state="panel">ready</button> : null}
+          </section>
+        );
+      }
+    `;
+    const domModule = instantiateTransformedModule(
+      source,
+      { ssr: false },
+      ["View"],
+      createTemplateInstance,
+      { initialReady: false },
+    );
+    const ssrModule = instantiateTransformedModule(
+      source,
+      { ssr: true },
+      ["View"],
+      createSSRTemplate,
+      { initialReady: true },
+    );
+    const domView = domModule.View as () => unknown;
+    const ssrView = ssrModule.View as () => unknown;
+    const container = document.createElement("div");
+
+    container.innerHTML = renderToString(() => ssrView(), { hydrate: true });
+
+    expect(() => hydrate(() => domView() as never, container)).toThrow(
+      /Hydration left the server (node ref|insert marker)/,
+    );
+  });
 });
